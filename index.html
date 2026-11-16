@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Doux Arcade</title>
+<meta name="description" content="Quick games from Doux. Pick one and play in your browser.">
+<meta name="theme-color" content="#F8F3E9">
+<meta property="og:title" content="Doux Arcade">
+<meta property="og:description" content="Quick games from Doux. Pick one and play in your browser.">
+<meta property="og:type" content="website">
+<style>
+@font-face{font-family:'Grozel';src:url('fonts/Grozel.woff2') format('woff2');font-display:swap}
+@font-face{font-family:'Noir Pro';src:url('fonts/NoirPro-Light.otf') format('opentype');font-weight:100 900;font-display:swap}
+:root{--teal:#064343;--cream:#F8F3E9;--ink:#021616;--muted:rgba(248,243,233,.7);--page-muted:rgba(6,67,67,.72)}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--cream)}
+body{min-height:100vh;min-height:100dvh;background:var(--cream);color:var(--teal);font-family:'Noir Pro',system-ui,sans-serif;-webkit-tap-highlight-color:transparent;padding:calc(32px + env(safe-area-inset-top)) 0 calc(24px + env(safe-area-inset-bottom));overflow-x:hidden}
+h1,h2{text-wrap:balance;line-height:1.1;font-family:'Grozel','Noir Pro',sans-serif;font-weight:400;letter-spacing:.02em}
+p{text-wrap:pretty}
+.wrap{max-width:780px;margin:0 auto;padding:0 16px}
+header{text-align:center}
+.logo{width:60px;height:60px;display:block;margin:0 auto 14px}
+h1{font-size:40px}
+.sub{color:var(--page-muted);font-size:16px;line-height:1.45;margin-top:10px}
+/* one row of cards that swipes sideways, so the page stays short however many games there are */
+.games{list-style:none;display:flex;gap:14px;margin-top:20px;padding:12px 16px 40px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-padding-inline:16px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.games::-webkit-scrollbar{display:none}
+.games:focus-visible{outline:3px solid var(--teal);outline-offset:-3px}
+/* auto margins centre the row when it fits and fall away when it overflows */
+.game:first-child{margin-left:auto}
+.game:last-child{margin-right:auto}
+.game{position:relative;flex:0 0 auto;width:min(78vw,320px);aspect-ratio:4/5;scroll-snap-align:center;display:flex;flex-direction:column;background:var(--teal);color:var(--cream);border-radius:24px;padding:10px}
+/* the game picture sits inside the card like a screen in a cabinet; its corner is the card's 24px minus the 10px gap, so the two curves stay parallel */
+.art{display:block;width:100%;flex:1 1 0;min-height:0;object-fit:cover;border-radius:14px;background:#031d1d}
+.body{display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 12px;padding:10px 0 0 6px}
+h2{font-size:20px;white-space:nowrap}
+.body p{grid-column:1;color:var(--muted);font-size:13px;line-height:1.35}
+.btn{grid-column:2;grid-row:1/3}
+.btn{display:grid;place-items:center;min-height:44px;padding:0 20px;border-radius:14px;background:var(--cream);color:var(--teal);font-size:16px;font-weight:700;text-decoration:none}
+/* the link stretches over the whole card so a tap anywhere starts the game */
+.btn::after{content:'';position:absolute;inset:0;border-radius:24px}
+.btn:focus-visible{outline:none}
+.btn:focus-visible::after{outline:3px solid var(--teal);outline-offset:3px}
+.nav{display:flex;justify-content:center;gap:12px;margin-top:-20px}
+.nav[hidden]{display:none}
+.nav button{width:44px;height:44px;border-radius:14px;border:1.5px solid var(--teal);background:transparent;color:var(--teal);display:grid;place-items:center;cursor:pointer}
+.nav button:disabled{opacity:.3;cursor:default}
+.nav button:focus-visible{outline:3px solid var(--teal);outline-offset:3px}
+footer{margin-top:24px;text-align:center;color:var(--page-muted);font-size:13px;line-height:1.45}
+/* leaderboard: a small icon in the corner opens it, so the home page stays clean */
+.lb-open{position:absolute;top:calc(16px + env(safe-area-inset-top));right:16px;width:44px;height:44px;border-radius:14px;border:1.5px solid var(--teal);background:transparent;color:var(--teal);display:grid;place-items:center;cursor:pointer}
+.lb-open:focus-visible,.lb-close:focus-visible,.lb-retry:focus-visible{outline:3px solid var(--teal);outline-offset:3px}
+.lb{margin:auto;width:calc(100% - 32px);max-width:440px;max-height:min(84dvh,680px);overflow:auto;overscroll-behavior:contain;border:0;border-radius:24px;padding:22px 16px 18px;background:#fffcf5;color:var(--teal);font-family:inherit;box-shadow:0 18px 50px rgba(6,67,67,.25)}
+.lb::backdrop{background:rgba(6,67,67,.35);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.lb-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-left:4px}
+.lb h2{font-size:28px;white-space:normal}
+.lb-close{flex:none;width:44px;height:44px;border-radius:14px;border:0;background:rgba(6,67,67,.06);color:var(--teal);display:grid;place-items:center;cursor:pointer}
+.lb-sub{color:var(--page-muted);font-size:14px;line-height:1.45;margin:6px 0 16px;padding:0 4px}
+.lb ol{list-style:none;display:grid;gap:4px}
+.lb li{display:grid;grid-template-columns:22px 1fr auto;gap:2px 10px;align-items:baseline;padding:10px 12px;border-radius:12px;background:rgba(6,67,67,.06);font-size:14px;color:var(--page-muted)}
+.lb li b{font-size:16px;color:var(--teal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb li .tot{grid-column:3;grid-row:1;font-size:16px;font-weight:700;color:var(--teal);font-variant-numeric:tabular-nums}
+.lb li .split{grid-column:2/4;display:flex;flex-wrap:wrap;gap:0 12px;font-size:12px;font-variant-numeric:tabular-nums}
+.lb li .split span{white-space:nowrap}
+.lb li.msg{display:block;text-align:center;padding:16px 12px}
+.lb-retry{display:block;margin:10px auto 0;min-height:44px;padding:0 20px;border-radius:14px;border:1.5px solid var(--teal);background:transparent;color:var(--teal);font:inherit;font-size:15px;font-weight:700;cursor:pointer}
+@media (min-width:768px){.lb-open{top:24px;right:24px}.lb{padding:28px 24px 24px}}
+@media (hover:hover){.game{transition:box-shadow .25s,transform .25s}.game:hover{box-shadow:0 18px 36px rgba(6,67,67,.24);transform:translateY(-4px)}}
+@media (prefers-reduced-motion:reduce){.game{transition:none}.game:hover{transform:none}}
+@media (min-width:768px){
+  body{padding-top:48px;padding-bottom:32px}
+  h1{font-size:60px}
+  .logo{width:72px;height:72px}
+  .games{gap:24px;margin-top:28px;padding-inline:32px;scroll-padding-inline:32px}
+}
+</style>
+</head>
+<body>
+<button type="button" class="lb-open" id="lbOpen" aria-label="Leaderboard" aria-haspopup="dialog"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3h8v4a4 4 0 0 1-8 0V3zM6 5H3v1a3 3 0 0 0 3 3M14 5h3v1a3 3 0 0 1-3 3M10 11v3M7 17h6M8 14h4v3H8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg></button>
+<dialog class="lb" id="lb" aria-labelledby="lbTitle">
+  <div class="lb-head"><h2 id="lbTitle">Leaderboard</h2><button type="button" class="lb-close" id="lbClose" aria-label="Close leaderboard"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+  <p class="lb-sub">Your best Coin Run score plus your best Brick Breaker score. Use the same name in both games to count both.</p>
+  <ol id="lbList"></ol>
+</dialog>
+<div class="wrap">
+  <header>
+    <svg class="logo" viewBox="0 0 12772 13057" aria-hidden="true"><path fill="#064343" d="M1169.98 6623.36C1983.5 5577.41 4390.15 2458.92 5491.79 1030.42C6545.01 -531.235 7126.09 25.894 7489.27 485.66C8627.22 1926.27 11077.5 5054.44 12210.6 6623.36C13627 8584.53 12065.3 9746.7 10794.2 11925.8C9777.28 13669 8941.97 13015.3 8651.43 12470.5C8179.3 11816.8 7053.45 10276.9 6327.1 9347.2C5419.16 8185.03 6472.37 7930.81 7852.44 7277.08C9232.52 6623.36 8433.53 5424.88 7961.4 4117.44C7489.27 2809.99 7053.45 2882.63 6762.91 2918.95C6472.37 2955.27 6109.19 3500.03 5891.29 4117.44C5673.38 4734.84 3966.45 8620.84 3203.78 10218.8C2441.11 11816.8 1642.11 10473.1 552.583 9347.2C-536.948 8221.35 153.088 7930.81 1169.98 6623.36Z"/></svg>
+    <h1>Doux Arcade</h1>
+    <p class="sub">Quick games from Doux. Pick one and play.</p>
+  </header>
+</div>
+<main>
+    <ul class="games" id="games" tabindex="0" aria-label="Games">
+      <li class="game">
+        <img class="art" src="coin-run.jpg" width="900" height="900" alt="Coin Run: the Doux ship firing at drones, with coins and asteroids around it">
+        <div class="body">
+          <h2>Coin Run</h2>
+          <a class="btn" href="coin-run/" aria-label="Play Coin Run">Play</a>
+          <p>Shoot drones, grab coins</p>
+        </div>
+      </li>
+      <li class="game">
+        <img class="art" src="brick-breaker.jpg" width="900" height="900" alt="Brick Breaker: a ball heading for rows of bricks above the paddle">
+        <div class="body">
+          <h2>Brick Breaker</h2>
+          <a class="btn" href="brick-breaker/" aria-label="Play Brick Breaker">Play</a>
+          <p>Break bricks, catch coins</p>
+        </div>
+      </li>
+    </ul>
+    <div class="nav" id="nav" hidden>
+      <button type="button" id="prev" aria-label="Previous game"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M11 3L5 9l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" id="next" aria-label="Next game"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M7 3l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+</main>
+<div class="wrap">
+  <footer><p>Doux Arcade is just for fun. Points and coins have no real value, and nothing here is financial advice.</p></footer>
+</div>
+<script>
+// The arrows only show when there are more games than fit across the screen.
+(() => {
+  const row = document.getElementById('games'), nav = document.getElementById('nav');
+  const prev = document.getElementById('prev'), next = document.getElementById('next');
+  const step = dir => {
+    const card = row.querySelector('.game');
+    const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    row.scrollBy({ left: dir * (card.offsetWidth + parseFloat(getComputedStyle(row).columnGap || 0)), behavior: smooth ? 'smooth' : 'auto' });
+  };
+  const sync = () => {
+    const max = row.scrollWidth - row.clientWidth;
+    nav.hidden = max <= 4;
+    prev.disabled = row.scrollLeft <= 4;
+    next.disabled = row.scrollLeft >= max - 4;
+  };
+  prev.onclick = () => step(-1);
+  next.onclick = () => step(1);
+  row.addEventListener('scroll', sync, { passive: true });
+  addEventListener('resize', sync);
+  addEventListener('load', sync);
+  sync();
+})();
+</script>
+<script>
+// Combined board from the shared Supabase project. The key is the public one: the database only lets it read.
+// Left empty, there is no board, so the trophy button is taken off the page.
+(() => {
+  const LB = { url: '', key: '' };   // your Supabase project URL and publishable key; see the README
+  if (!LB.url || !LB.key) { document.getElementById('lbOpen').remove(); return; }
+  const dlg = document.getElementById('lb'), list = document.getElementById('lbList');
+  const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const num = n => Number(n).toLocaleString();
+  async function load() {
+    list.innerHTML = '<li class="msg">Loading scores…</li>';
+    try {
+      const res = await fetch(LB.url + '/rest/v1/arcade_leaderboard?select=player_name,coin_run,brick_breaker,total&order=total.desc&limit=20', { headers: { apikey: LB.key, Authorization: 'Bearer ' + LB.key } });
+      if (!res.ok) throw new Error('Leaderboard request failed: ' + res.status);
+      const rows = await res.json();
+      list.innerHTML = rows.length ? rows.map((r, i) =>
+        `<li><span>${i + 1}</span><b>${esc(r.player_name)}</b><span class="tot">${num(r.total)}</span><span class="split"><span>Coin Run ${num(r.coin_run)}</span><span>Brick Breaker ${num(r.brick_breaker)}</span></span></li>`).join('')
+        : '<li class="msg">No scores yet. Play a game to get on the board.</li>';
+    } catch (e) {
+      list.innerHTML = '<li class="msg">Couldn\'t load the leaderboard. Check your connection and try again.<button type="button" class="lb-retry" id="lbRetry">Try again</button></li>';
+      document.getElementById('lbRetry').onclick = load;
+    }
+  }
+  document.getElementById('lbOpen').onclick = () => { dlg.showModal(); load(); };
+  document.getElementById('lbClose').onclick = () => dlg.close();
+  dlg.addEventListener('click', e => {   // a tap on the dimmed backdrop, outside the panel, closes it
+    if (e.target !== dlg) return;   // a button inside the panel, including keyboard presses that report no position
+    const r = dlg.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dlg.close();
+  });
+})();
+</script>
+</body>
+</html>
