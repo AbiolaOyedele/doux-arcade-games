@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Brick Breaker</title>
+<meta name="description" content="Brick Breaker by Doux. Break the bricks and catch the falling coins for power-ups.">
+<meta property="og:title" content="Brick Breaker">
+<meta property="og:description" content="Break the bricks and catch the falling coins for power-ups.">
+<meta name="theme-color" content="#F8F3E9">
+<style>
+/* Noir Pro Light for every weight the page asks for, so nothing is faked bold. */
+@font-face{font-family:'Grozel';src:url('fonts/Grozel.woff2') format('woff2');font-display:swap}
+@font-face{font-family:'Noir Pro';src:url('fonts/NoirPro-Light.otf') format('opentype');font-weight:100 900;font-display:swap}
+/* Cream page, brand teal ink. --gold and --green are darkened so they stay readable on cream. */
+:root{--teal:#064343;--cream:#F8F3E9;--card:#fffcf5;--muted:rgba(6,67,67,.68);--line:rgba(6,67,67,.16);--soft:rgba(6,67,67,.06);--gold:#9a6b12;--green:#1f7a5a}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--cream);color:var(--teal);font-family:'Noir Pro',system-ui,sans-serif;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+h1,h2,h3{text-wrap:balance;line-height:1.1}
+p,li,small,.note{text-wrap:pretty}
+canvas{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none}
+.hidden{display:none!important}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+#safe{position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom);pointer-events:none;visibility:hidden}
+
+/* coin chip: one centred symbol on a coloured disc */
+.g{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;font:700 13px/1 Arial,system-ui,sans-serif;color:#06201f;flex:none}
+.g svg{display:block}
+
+/* ---------- in-game display ---------- */
+#hud{position:fixed;left:0;right:0;top:0;pointer-events:none;touch-action:none;padding:calc(10px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left))}
+.hud-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;max-width:640px;margin:0 auto}
+#score{font-size:24px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+#chain{height:16px;margin-top:5px;white-space:nowrap;font-size:13px;font-weight:700;color:var(--gold)}
+.hud-level{text-align:center;min-width:112px}
+#lvlLbl{font-size:13px;font-weight:700;white-space:nowrap}
+.bar{height:5px;background:var(--line);border-radius:3px;margin-top:7px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--teal);border-radius:3px;transition:width .2s}
+.hud-right{display:flex;justify-content:flex-end;align-items:center;gap:10px}
+#lives{display:flex;gap:4px}
+#lives i{display:block;width:10px;height:10px;border-radius:50%;background:var(--teal)}
+#lives i.off{background:var(--line)}
+.ibtn{pointer-events:auto;width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:rgba(248,243,233,.75);display:grid;place-items:center}
+#fx{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;min-height:22px;margin-top:8px}
+.chip{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;white-space:nowrap}
+.chip .g{width:20px;height:20px;font-size:12px}
+.chip .t{width:44px;height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+.chip .t i{display:block;height:100%}
+/* Short landscape screens (a phone on its side): the display moves to the sides so the field gets the full height. */
+@media (orientation:landscape) and (max-height:520px){
+  .hud-top{position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));grid-template-columns:auto;justify-items:start;gap:12px;margin:0}
+  .hud-level{text-align:left}
+  .hud-right{justify-content:flex-start}
+  #fx{position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));flex-direction:column;align-items:flex-end;margin:0}
+}
+
+#hint{position:fixed;left:50%;transform:translate(-50%,-50%);font-size:15px;font-weight:700;color:var(--muted);pointer-events:none;white-space:nowrap}
+@media (prefers-reduced-motion:no-preference){#hint{animation:breathe 1.6s ease-in-out infinite}}
+@keyframes breathe{50%{opacity:.45}}
+#toast{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);width:min(92vw,520px);font-size:28px;font-weight:800;line-height:1.1;pointer-events:none;text-align:center;opacity:0;text-shadow:0 1px 12px rgba(248,243,233,.95);text-wrap:balance}
+#toast small{display:block;font-size:15px;font-weight:600;margin-top:6px;opacity:.9}
+#toast.show{animation:toast 1.7s ease-out}
+@keyframes toast{0%{opacity:0;transform:translate(-50%,-30%) scale(.9)}15%{opacity:1;transform:translate(-50%,-50%) scale(1)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-70%)}}
+#flash{position:fixed;inset:0;pointer-events:none;opacity:0}
+.pop{position:fixed;pointer-events:none;font-weight:800;font-size:15px;transform:translate(-50%,-50%);animation:pop .9s ease-out forwards;text-shadow:0 1px 8px rgba(248,243,233,.95);white-space:nowrap}
+@keyframes pop{to{transform:translate(-50%,-190%);opacity:0}}
+
+/* ---------- menus ---------- */
+.ov{position:fixed;inset:0;display:grid;place-items:center;overflow:auto;touch-action:pan-y;background:rgba(248,243,233,.82);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom))}
+.panel{width:100%;max-width:400px;text-align:center}
+.card{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:32px 20px 24px;box-shadow:0 12px 40px rgba(6,67,67,.1)}
+.logo{width:68px;height:68px;margin:0 auto 14px;display:block}
+h1{font-family:'Grozel','Noir Pro',sans-serif;font-size:clamp(38px,11vw,52px);font-weight:400;letter-spacing:.02em}
+h2{font-size:28px;font-weight:800}
+h3{font-size:16px;font-weight:700;margin:24px 0 10px}
+.sub{color:var(--muted);font-size:16px;line-height:1.45;margin-top:10px;text-wrap:balance}
+.note{color:var(--muted);font-size:14px;margin-top:14px;min-height:20px}
+.arcade{pointer-events:auto;display:inline-flex;align-items:center;gap:6px;min-height:44px;margin-top:14px;padding:0 10px;color:var(--muted);font-size:15px;font-weight:700;text-decoration:none}
+.arcade:focus-visible{outline:2px solid currentColor;outline-offset:2px;border-radius:8px}
+.stack{display:grid;gap:10px;margin-top:22px}
+.btn{pointer-events:auto;display:block;width:100%;min-height:52px;padding:0 20px;border-radius:999px;border:1px solid var(--teal);background:var(--teal);color:var(--cream);font-size:17px;font-weight:700}
+.btn.ghost{background:transparent;border-color:rgba(6,67,67,.3);color:var(--teal)}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.6;cursor:default}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.scores{margin-top:20px;text-align:left}
+.scores ol{list-style:none;display:grid;gap:4px}
+.scores li{display:grid;grid-template-columns:20px 1fr auto;gap:10px;align-items:baseline;min-height:52px;align-content:center;padding:10px 12px;border-radius:12px;background:var(--soft);font-size:14px;color:var(--muted)}
+.scores li b{font-size:16px;color:var(--teal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scores li span:last-child{font-variant-numeric:tabular-nums}
+.scores li.msg{display:flex;align-items:center;justify-content:center;text-align:center}
+.field{display:block;text-align:left;margin-top:20px;font-size:14px;font-weight:600;color:var(--muted)}
+.field input{display:block;width:100%;min-height:52px;margin-top:8px;padding:0 16px;border-radius:14px;border:1px solid rgba(6,67,67,.3);background:var(--soft);color:var(--teal);font:inherit;font-size:17px;font-weight:600;user-select:text;-webkit-user-select:text}
+.field input:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+#oNote:empty{display:none}
+.err{color:#b3261e;font-size:14px;font-weight:600;min-height:20px;margin-top:8px;text-align:left}
+.help{text-align:left;max-width:480px}
+.tabs{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;margin-top:20px;padding:4px;border-radius:14px;background:var(--soft)}
+.tab{min-height:44px;border:0;border-radius:10px;background:transparent;font-size:15px;font-weight:700;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--teal);color:var(--cream)}
+.pane{margin-top:16px}
+.facts{list-style:none;display:grid;gap:6px}
+.facts li{background:var(--soft);border-radius:12px;padding:12px 14px;font-size:15px;line-height:1.4;color:var(--muted)}
+.facts b{display:block;color:var(--teal);font-size:15px;margin-bottom:2px}
+.legend{display:grid;gap:6px}
+.legend div{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;align-items:center;background:var(--soft);border-radius:12px;padding:10px 12px;font-weight:700;font-size:15px}
+.legend .g{grid-row:span 2;width:32px;height:32px;font-size:17px}
+.legend .sw{grid-row:span 2;width:32px;height:16px;border-radius:4px}
+.legend small{color:var(--muted);font-size:13px;font-weight:500}
+@media (min-width:768px){.legend{grid-template-columns:1fr 1fr}}
+.toggles{display:grid;gap:6px}
+.tog{pointer-events:auto;display:flex;justify-content:space-between;align-items:center;width:100%;min-height:48px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--soft);font-weight:600;font-size:15px}
+.tog span{font-weight:700;color:var(--muted)}
+.tog[aria-pressed="true"] span{color:var(--green)}
+.help .btn{margin-top:24px}
+.score{font-size:54px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;margin-top:22px}
+.score + .note{margin-top:8px}
+.bestline{color:var(--teal);font-weight:700;font-size:15px;min-height:22px;margin-top:14px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:24px}
+.stats div{background:var(--soft);border-radius:12px;padding:14px 2px;font-size:12px;color:var(--muted)}
+.stats b{display:block;margin-bottom:4px;font-size:19px;color:var(--teal);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Brick Breaker playing field"></canvas>
+<div id="safe"></div>
+
+<div id="hud" class="hidden">
+  <div class="hud-top">
+    <div><div id="score">0</div><div id="chain"></div></div>
+    <div class="hud-level"><div id="lvlLbl">Level 1</div><div class="bar"><i id="lvlbar"></i></div></div>
+    <div class="hud-right">
+      <div id="lives" role="img" aria-label="3 lives"></div>
+      <button id="bPause" class="ibtn" aria-label="Pause"><svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true"><rect width="4" height="16" rx="1.5" fill="currentColor"/><rect x="10" width="4" height="16" rx="1.5" fill="currentColor"/></svg></button>
+    </div>
+  </div>
+  <div id="fx"></div>
+</div>
+<div id="hint" class="hidden"></div>
+<div id="toast" aria-live="polite"></div>
+<div id="flash"></div>
+
+<div id="menu" class="ov">
+  <div class="panel">
+    <svg class="logo" viewBox="0 0 12772 13057" aria-hidden="true"><defs><linearGradient id="lg" x1="6789" y1="1920" x2="6790" y2="10445" gradientUnits="userSpaceOnUse"><stop stop-color="#064343"/><stop offset=".616" stop-color="#2c9a85"/><stop offset="1" stop-color="#064343"/></linearGradient></defs><path class="lp" fill="url(#lg)" d=""/></svg>
+    <h1>Brick Breaker</h1>
+    <p class="sub">Break the bricks and catch the falling coins for power-ups.</p>
+    <div class="stack">
+      <button class="btn" id="bStart">Play</button>
+      <div class="row2"><button class="btn ghost" id="bHelp">How to play</button><button class="btn ghost" id="bSet">Settings</button></div>
+      <button class="btn ghost" id="bBoard">Leaderboard</button>
+    </div>
+    <p class="note" id="menuStats"></p>
+    <a class="arcade" href="../"><svg width="14" height="14" viewBox="0 0 18 18" aria-hidden="true"><path d="M11 3L5 9l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Go to Doux Arcade</a>
+  </div>
+</div>
+
+<div id="helpOv" class="ov hidden">
+  <div class="panel card help">
+    <h2>How to play</h2>
+    <p class="sub">Bounce the ball off your paddle to break every brick. Some bricks drop a coin. Catch it with the paddle for a power-up.</p>
+    <div class="tabs" role="tablist" aria-label="How to play sections">
+      <button class="tab" role="tab" id="tabControls" aria-controls="paneControls" aria-selected="true">Controls</button>
+      <button class="tab" role="tab" id="tabCoins" aria-controls="paneCoins" aria-selected="false">Coins</button>
+      <button class="tab" role="tab" id="tabBricks" aria-controls="paneBricks" aria-selected="false">Bricks</button>
+    </div>
+    <div class="pane" role="tabpanel" id="paneControls" aria-labelledby="tabControls">
+      <ul class="facts">
+        <li><b>Move</b>Drag anywhere on a phone. Mouse or arrow keys on a computer.</li>
+        <li><b>Launch</b>Tap, click or press Space to send the ball off the paddle.</li>
+        <li><b>Aim</b>Where the ball lands on the paddle sets its angle. The edges send it out wide.</li>
+        <li><b>Chain</b>Break bricks without the ball touching the paddle. Every four bricks raises the multiplier.</li>
+        <li><b>Lives</b>You start with three. Lose every ball and you lose a life.</li>
+      </ul>
+    </div>
+    <div class="pane hidden" role="tabpanel" id="paneCoins" aria-labelledby="tabCoins"></div>
+    <div class="pane hidden" role="tabpanel" id="paneBricks" aria-labelledby="tabBricks"></div>
+    <button class="btn" id="bHelpClose">Done</button>
+  </div>
+</div>
+
+<div id="setOv" class="ov hidden">
+  <div class="panel card help">
+    <h2>Settings</h2>
+    <h3>Game</h3>
+    <div class="toggles">
+      <button class="tog" id="sSound" aria-pressed="true">Sound <span>On</span></button>
+    </div>
+    <h3>Player</h3>
+    <div class="toggles">
+      <button class="tog" id="sName">Player name <span id="sNameVal">Not set</span></button>
+    </div>
+    <button class="btn" id="bSetClose">Done</button>
+  </div>
+</div>
+
+<div id="boardOv" class="ov hidden">
+  <div class="panel card help">
+    <h2>Leaderboard</h2>
+    <div class="scores"><ol id="scoreList"></ol></div>
+    <button class="btn ghost hidden" id="bBoardRetry">Try again</button>
+    <button class="btn" id="bBoardClose">Done</button>
+  </div>
+</div>
+
+<div id="nameOv" class="ov hidden">
+  <form class="panel card" id="nameForm" novalidate>
+    <h2>What should we call you?</h2>
+    <p class="sub">Your name and best score appear on the leaderboard. The name is yours in every Doux Arcade game.</p>
+    <label class="field">Player name<input id="nameIn" type="text" maxlength="16" autocomplete="nickname" autocapitalize="words" spellcheck="false"></label>
+    <p class="err" id="nameErr" role="alert"></p>
+    <div class="stack">
+      <button class="btn" type="submit" id="nameGo">Continue</button>
+      <button class="btn ghost" type="button" id="bNameBack">Back</button>
+    </div>
+  </form>
+</div>
+
+<div id="pauseOv" class="ov hidden">
+  <div class="panel card">
+    <h2>Paused</h2>
+    <div class="stack">
+      <button class="btn" id="bResume">Resume</button>
+      <div class="row2"><button class="btn ghost" id="bPauseHelp">How to play</button><button class="btn ghost" id="bPauseSet">Settings</button></div>
+      <button class="btn ghost" id="bQuit">Quit to menu</button>
+    </div>
+  </div>
+</div>
+
+<div id="overOv" class="ov hidden">
+  <div class="panel card">
+    <h2 id="oTitle">Game over</h2>
+    <p class="sub" id="oSub"></p>
+    <div id="oScore" class="score">0</div>
+    <p class="note">points</p>
+    <p id="oBestLine" class="bestline"></p>
+    <div class="stats"><div><b id="oLevel">1</b>level</div><div><b id="oBricks">0</b>bricks</div><div><b id="oCoins">0</b>coins</div><div><b id="oChain">x1</b>top chain</div></div>
+    <div class="stack">
+      <button class="btn" id="bAgain">Play again</button>
+      <button class="btn ghost" id="bOverMenu">Menu</button>
+    </div>
+    <p class="note" id="oNote" role="status"></p>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/CopyShader.js"></script>
+<script src="vendor/LuminosityHighPassShader.js"></script>
+<script src="vendor/EffectComposer.js"></script>
+<script src="vendor/RenderPass.js"></script>
+<script src="vendor/ShaderPass.js"></script>
+<script src="vendor/UnrealBloomPass.js"></script>
+<script src="doux-assets.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const { LOGO_D } = DouxAssets;
+document.querySelectorAll('.lp').forEach(el => el.setAttribute('d', LOGO_D));
+
+/* ---------- Data ---------- */
+// w: how often the coin drops, relative to the others.
+const CUR = {
+  ngn:  { g: '₦', name: 'Naira',   col: '#9be3b4', w: 18, desc: 'Wider paddle for 12s' },
+  usd:  { g: '$', name: 'Dollar',  col: '#f6dc8c', w: 14, desc: 'Splits every ball into three' },
+  gbp:  { g: '£', name: 'Pound',   col: '#e8b4e6', w: 12, desc: 'The paddle fires lasers for 10s' },
+  eur:  { g: '€', name: 'Euro',    col: '#a8cbf5', w: 14, desc: 'Sticky paddle for 12s. Catch the ball, aim, then let go' },
+  usdt: { g: '<svg viewBox="0 0 100 100" width="66%" height="66%"><path fill="#06201f" d="M24 22h52v14H57v42H43V36H24z"/><ellipse cx="50" cy="50" rx="30" ry="7" fill="none" stroke="#06201f" stroke-width="4"/></svg>', name: 'Tether', col: '#8fd3bd', w: 14, desc: 'Slows the ball for 10s' },
+  sol:  { g: '<svg viewBox="0 0 100 100" width="64%" height="64%"><path fill="#06201f" d="M32 24h46l-10 12H22zM22 44h46l10 12H32zM32 64h46l-10 12H22z"/></svg>', name: 'Solana', col: '#b3a5f2', w: 11, desc: 'Fireball for 8s. Smashes straight through bricks' },
+  btc:  { g: '₿', name: 'Bitcoin', col: '#f7c59a', w: 4,  desc: 'Extra life. Rare' },
+};
+const TYPES = Object.keys(CUR);
+// Timed power-ups. The rest (Dollar, Bitcoin) happen once, the moment the coin is caught.
+const FX = {
+  wide:   { t: 'ngn',  label: 'Wide paddle', max: 12 },
+  laser:  { t: 'gbp',  label: 'Lasers',      max: 10 },
+  sticky: { t: 'eur',  label: 'Sticky',      max: 12 },
+  slow:   { t: 'usdt', label: 'Slow ball',   max: 10 },
+  fire:   { t: 'sol',  label: 'Fireball',    max: 8 },
+};
+const POWER_OF = { ngn: 'wide', gbp: 'laser', eur: 'sticky', usdt: 'slow', sol: 'fire' };
+
+// One string per row. The row length sets how many bricks fit across: later levels use 14 or 16, so the bricks shrink to fit.
+// 1-3: hits to break. #: steel, which never breaks. Steel does not count towards clearing a level.
+const LEVELS = [
+  ['111111111111', '111111111111', '111111111111', '111111111111', '111111111111'],
+  ['.....22.....', '....1111....', '...111111...', '..11111111..', '.1111111111.', '111111111111', '111111111111', '222222222222'],
+  ['2.2.2.22.2.2.2', '11111111111111', '..............', '11111111111111', '2.2.2.22.2.2.2', '11111111111111', '11111111111111', '22222222222222'],
+  ['......33......', '.....2112.....', '....211112....', '...21111112...', '..2111111112..', '.211111111112.', '21111111111112', '.211111111112.', '..2111111112..', '...21111112...', '....211112....', '.....2112.....', '......22......'],
+  ['33333333333333', '22222222222222', '1............1', '1.2222222222.1', '1.2........2.1', '1.2.111111.2.1', '1.2.133331.2.1', '1.2.111111.2.1', '1.2........2.1', '1.2222222222.1', '1............1', '11111111111111', '#####....#####'],
+  ['1.22.33..33.22.1', '1.22.33..33.22.1', '1.22.33..33.22.1', '1.22.33..33.22.1', '1.22.33..33.22.1', '1.22.33..33.22.1', '1.22.33..33.22.1', '1.22.33..33.22.1', '1.22.33..33.22.1', '1.22.33..33.22.1', '1.22.33..33.22.1', '#..............#'],
+  ['2.2.2.2.2.2.2.2.', '.1.1.1.1.1.1.1.1', '3.3.3.3.3.3.3.3.', '.1.1.1.1.1.1.1.1', '2.2.2.2.2.2.2.2.', '.1.1.1.1.1.1.1.1', '1.1.1.1.1.1.1.1.', '.2.2.2.2.2.2.2.2', '1.1.1.1.1.1.1.1.', '.3.3.3.3.3.3.3.3', '1.1.1.1.1.1.1.1.', '.1.1.1.1.1.1.1.1', '2.2.2.2.2.2.2.2.', '.1.1.1.1.1.1.1.1', '1.1.1.1.1.1.1.1.', '.1.1.1.1.1.1.1.1'],
+  ['#33333333333333#', '#22222222222222#', '#11111111111111#', '#1############1#', '#11111111111111#', '#22222222222222#', '#11111111111111#', '#33333333333333#', '#11111111111111#', '#22222222222222#', '#11111111111111#'],
+];
+
+/* ---------- Field, in world units ---------- */
+const W = 9, H = 14, HALF_W = W / 2, TOP = H / 2, BOTTOM = -H / 2;
+const PADDLE_Y = -5.8, PADDLE_H = 0.3, PADDLE_W = 1.8, PADDLE_WIDE = 2.7;
+const BALL_R = 0.15, MAX_BALLS = 12;
+const FIRST_ROW_Y = TOP - 0.4;   // the top row sits just under the wall, too close for the ball to slip behind
+// Brick size for the current level. Twelve across is full size; more across scales the brick and the row down together.
+let CELL = 0, BRICK_W = 0, BRICK_H = 0, ROW_H = 0;
+const START_LIVES = 3, MAX_LIVES = 5;
+const COIN_R = 0.42;
+
+/* ---------- Renderer / scene ---------- */
+const canvas = $('#c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xF8F3E9);
+const FOV = 28;
+const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 300);
+scene.environment = DouxAssets.makeEnv(renderer);
+DouxAssets.init(renderer);
+
+// Coin Run's lights and glow, so the shared silver coins look the same in both games.
+scene.add(new THREE.AmbientLight(0x8090b0, 0.35));
+const key = new THREE.DirectionalLight(0xffffff, 1.1); key.position.set(5, -6, 10); scene.add(key);
+const rim = new THREE.DirectionalLight(0x5aa8ff, 1.4); rim.position.set(-6, 12, -4); scene.add(rim);
+const warm = new THREE.DirectionalLight(0xff9a5a, 0.5); warm.position.set(8, 6, 2); scene.add(warm);
+
+let composer = null;
+if (THREE.EffectComposer && THREE.UnrealBloomPass && THREE.RenderPass) {
+  try {
+    composer = new THREE.EffectComposer(renderer);
+    composer.addPass(new THREE.RenderPass(scene, camera));
+    // Threshold sits just above the cream background, so only real highlights (coin shine, the fireball) glow.
+    composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.85, 0.45, 0.97));
+  } catch (e) { composer = null; }   // no glow pass: render the plain scene
+}
+
+function glowTex() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'), rg = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  rg.addColorStop(0, 'rgba(255,255,255,1)'); rg.addColorStop(0.35, 'rgba(255,255,255,.45)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+const GLOW = glowTex();
+const glowMat = (col, opacity) => new THREE.SpriteMaterial({ map: GLOW, color: col, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
+
+/* ---------- Background: stars, the field and its walls ---------- */
+const STAR_N = 500, starPos = new Float32Array(STAR_N * 3);
+for (let i = 0; i < STAR_N; i++) { starPos[i * 3] = rand(-45, 45); starPos[i * 3 + 1] = rand(-32, 32); starPos[i * 3 + 2] = rand(-40, -15); }
+const starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 2.2, sizeAttenuation: false, map: GLOW, color: 0x064343, transparent: true, opacity: 0.18, depthWrite: false }));
+scene.add(stars);
+
+const field = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ color: 0xEFE7D5 }));
+field.position.z = -0.6; scene.add(field);
+const wallMat = new THREE.MeshBasicMaterial({ color: 0x064343, transparent: true, opacity: 0.3 });
+[[-HALF_W - 0.04, 0, 0.08, H], [HALF_W + 0.04, 0, 0.08, H], [0, TOP + 0.04, W + 0.16, 0.08]].forEach(([x, y, w, h]) => {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMat); m.position.set(x, y, -0.55); scene.add(m);
+});
+
+/* ---------- Bricks ---------- */
+function roundedRect(w, h, r) {
+  const s = new THREE.Shape(), x = -w / 2, y = -h / 2;
+  s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+  s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+  s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+  return s;
+}
+const BEV = 0.04;
+const brickGeos = {};
+let brickGeo = null;
+function setGrid(cols) {
+  const f = 12 / cols;
+  CELL = W / cols; BRICK_W = CELL - 0.06; BRICK_H = 0.3 * f; ROW_H = 0.38 * f;
+  if (!brickGeos[cols]) {
+    brickGeos[cols] = new THREE.ExtrudeGeometry(roundedRect(BRICK_W - BEV * 2, BRICK_H - BEV * 2, 0.03), { depth: 0.2, bevelEnabled: true, bevelThickness: BEV, bevelSize: BEV, bevelSegments: 3, curveSegments: 4 });
+    brickGeos[cols].translate(0, 0, -0.26);
+  }
+  brickGeo = brickGeos[cols];
+}
+// One-hit bricks are shades of teal by row. Tougher bricks are gold (two hits) and silver (three), and step down a colour with each hit.
+const ROW_COLS = ['#0b6a63', '#0f7a6f', '#1a8a7a', '#2c9a85', '#45a991', '#5fb79d', '#45a991', '#2c9a85', '#1a8a7a'];
+const MAT = {
+  row: ROW_COLS.map(c => new THREE.MeshStandardMaterial({ color: c, metalness: 0.1, roughness: 0.5, envMapIntensity: 0.15 })),
+  gold: new THREE.MeshStandardMaterial({ color: 0xd9a84e, metalness: 0.35, roughness: 0.42, envMapIntensity: 0.3 }),
+  silver: new THREE.MeshStandardMaterial({ color: 0xc3c9d2, metalness: 0.55, roughness: 0.32 }),   // less metallic, or it mirrors the dark sky and reads navy
+  steel: new THREE.MeshStandardMaterial({ color: 0x34404b, metalness: 0.8, roughness: 0.38 }),
+  hit: new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 }),
+};
+const matFor = k => k.steel ? MAT.steel : k.hits >= 3 ? MAT.silver : k.hits === 2 ? MAT.gold : MAT.row[k.row % MAT.row.length];
+
+/* ---------- Paddle: the hover sled. A teal slab with a cream stripe, riding on two small engines ---------- */
+const paddle = (() => {
+  const group = new THREE.Group(), body = new THREE.Group(), BEVEL = 0.04, SLAB_H = 0.28;
+  const slabGeo = new THREE.ExtrudeGeometry(roundedRect(PADDLE_W - BEVEL * 2, SLAB_H - BEVEL * 2, 0.11), { depth: 0.16, bevelEnabled: true, bevelThickness: BEVEL, bevelSize: BEVEL, bevelSegments: 4, curveSegments: 10 });
+  slabGeo.translate(0, 0, -0.08);
+  const teal = new THREE.MeshStandardMaterial({ color: 0x0f726d, metalness: 0.25, roughness: 0.4 });
+  const cream = new THREE.MeshStandardMaterial({ color: new THREE.Color(0xF8F3E9).multiplyScalar(0.5), metalness: 0, roughness: 0.7 });
+  const silver = new THREE.MeshStandardMaterial({ color: 0xc3c9d2, metalness: 0.55, roughness: 0.32 });
+  // The slab and stripe stretch with the paddle's width; engines and guns are placed, not stretched, so they keep their shape.
+  const stretch = new THREE.Group(); body.add(stretch);
+  stretch.add(new THREE.Mesh(slabGeo, teal));
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(PADDLE_W - 0.5, 0.045, 0.03), cream); stripe.position.set(0, 0.02, 0.13); stretch.add(stripe);
+  const podGeo = new THREE.CylinderGeometry(0.07, 0.09, 0.12, 16), pods = [], glows = [];
+  [-1, 1].forEach(() => {
+    const pod = new THREE.Mesh(podGeo, silver); body.add(pod); pods.push(pod);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: 0x3fbf9f, transparent: true, opacity: 0.5, depthWrite: false })); glow.scale.set(0.34, 0.34, 1); body.add(glow); glows.push(glow);
+  });
+  const gunGeo = new THREE.ConeGeometry(0.07, 0.26, 10), gunMat = new THREE.MeshStandardMaterial({ color: 0x110000, emissive: 0xe8b4e6, emissiveIntensity: 1 });
+  const guns = [new THREE.Mesh(gunGeo, gunMat), new THREE.Mesh(gunGeo, gunMat)]; guns.forEach(g => body.add(g));
+  group.add(body); group.position.y = PADDLE_Y; scene.add(group);
+  const p = { group, x: 0, w: PADDLE_W, target: PADDLE_W };
+  let lastX = 0, t = 0;
+  p.sync = (laser, dt) => {
+    t += dt;
+    stretch.scale.x = p.w / PADDLE_W;
+    const podX = p.w / 2 - 0.35, gunX = p.w / 2 - 0.16;
+    [-1, 1].forEach((s, i) => {
+      pods[i].position.set(s * podX, -0.18, 0);
+      glows[i].position.set(s * podX, -0.28, 0.02);
+      glows[i].material.opacity = 0.4 + 0.12 * Math.sin(t * 23 + i * 2);   // a gentle engine flicker
+      guns[i].visible = laser; guns[i].position.set(s * gunX, SLAB_H / 2 + 0.1, 0);
+    });
+    // Leans into the direction it is moving. Only the model tilts: the ball still bounces off a flat paddle.
+    const vx = dt > 0 ? (p.x - lastX) / dt : 0; lastX = p.x;
+    body.rotation.z += (clamp(-vx * 0.02, -0.15, 0.15) - body.rotation.z) * Math.min(1, dt * 10);
+    group.position.x = p.x;
+  };
+  return p;
+})();
+
+/* ---------- Ball ---------- */
+const ballGeo = new THREE.SphereGeometry(BALL_R, 24, 16);
+const ballMat = new THREE.MeshStandardMaterial({ color: 0x0b5a55, metalness: 0.3, roughness: 0.3 });
+// On cream, a glow that adds light disappears. The fireball is a deep red-orange instead, with its halo and trail painted over the background.
+const fireMat = new THREE.MeshStandardMaterial({ color: 0xe8461a, emissive: 0xc82a0a, emissiveIntensity: 0.6, roughness: 0.35 });
+const fireTrail = [0xe8461a, 0xf07a1e, 0xc0280c].map(c => new THREE.MeshBasicMaterial({ color: c }));
+const haloPlain = glowMat(0x064343, 0);   // only the fireball has a halo
+const haloFire = new THREE.SpriteMaterial({ map: GLOW, color: 0xf06a1e, transparent: true, opacity: 0.55, depthWrite: false });
+function makeBall(x, y, vx, vy) {
+  const mesh = new THREE.Mesh(ballGeo, ballMat), halo = new THREE.Sprite(haloPlain);
+  halo.scale.set(0.9, 0.9, 1); mesh.add(halo); scene.add(mesh);
+  return { mesh, halo, x, y, vx, vy, stuck: false, caught: false, off: 0, stuckT: 0, trailT: 0 };
+}
+
+/* ---------- Lasers, particles ---------- */
+const boltGeo = new THREE.BoxGeometry(0.06, 0.34, 0.06);
+const boltMat = new THREE.MeshBasicMaterial({ color: 0xb5489f });
+const partGeo = new THREE.BoxGeometry(0.11, 0.11, 0.11);
+
+/* ---------- State ---------- */
+let state = 'menu', level = 1, score = 0, lives = START_LIVES, chain = 0, topChain = 1;
+let bricks = [], balls = [], coins = [], bolts = [], parts = [];
+let breakable = 0, total = 1, ramp = 0, laserCd = 0, dropMeter = 0, clearT = 0;
+let bricksBroken = 0, coinsCaught = 0;
+const fx = { wide: 0, laser: 0, sticky: 0, slow: 0, fire: 0 };
+const mult = () => Math.min(5, 1 + Math.floor(chain / 4));
+// Each level starts about 9% faster than the last, and the ball keeps gaining speed for 40 seconds into the level.
+const ballSpeed = () => (7 + (level - 1) * 0.6 + ramp) * (fx.slow > 0 ? 0.65 : 1);
+
+function load(key, fallback) { try { return Object.assign({}, fallback, JSON.parse(localStorage.getItem(key) || '{}')); } catch (e) { return fallback; } }
+function save(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage unavailable: settings last for this visit */ } }
+const settings = load('brickbreaker_settings', { sound: true });
+let best = 0;
+// The leaderboard was reset on 2026-11-10: names and bests saved before then are dropped, so every player starts fresh.
+try { ['brickbreaker_name', 'brickbreaker_best'].forEach(k => localStorage.removeItem(k)); } catch (e) { /* storage unavailable */ }
+try { best = +localStorage.getItem('brickbreaker_best_v2') || 0; } catch (e) { best = 0; }
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- Audio ---------- */
+let AC = null;
+function initAudio() { if (AC) { if (AC.resume) AC.resume(); return; } try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } }
+function tone(f1, f2, dur, type = 'sine', vol = 0.05, delay = 0) {
+  if (!AC || !settings.sound) return;
+  const t = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f1, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur + 0.03);
+}
+
+/* ---------- Layout: fit the field between the display and the bottom edge ---------- */
+const hudEl = $('#hud'), hintEl = $('#hint'), toastEl = $('#toast'), flashEl = $('#flash');
+const SIDE = matchMedia('(orientation:landscape) and (max-height:520px)');
+let scale = 40, camY = 0;
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  if (composer) composer.setSize(w, h);
+  const top = SIDE.matches ? 10 : (hudEl.classList.contains('hidden') ? 96 : hudEl.offsetHeight + 8);
+  const bottom = 10 + $('#safe').offsetHeight;
+  const availH = h - top - bottom;
+  scale = Math.max(4, Math.min((w - 16) / (W + 0.3), availH / (H + 0.2)));   // pixels per world unit
+  camY = (top + availH / 2 - h / 2) / scale;
+  // Distance at which the field plane (z = 0) shows `scale` pixels per unit, so screen maths below stays exact.
+  const dist = h / (2 * scale * Math.tan(FOV * Math.PI / 360));
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  camera.position.set(0, camY, dist); camera.lookAt(0, camY, 0);
+  hintEl.style.top = toScreenY(PADDLE_Y - 0.7) + 'px';
+}
+const toScreenX = x => innerWidth / 2 + x * scale;
+const toScreenY = y => innerHeight / 2 - (y - camY) * scale;
+const toWorldX = px => (px - innerWidth / 2) / scale;
+addEventListener('resize', resize);
+if (SIDE.addEventListener) SIDE.addEventListener('change', resize);
+
+/* ---------- UI helpers ---------- */
+function toast(text, col = '#064343', small = '') {
+  toastEl.innerHTML = text + (small ? `<small>${small}</small>` : '');
+  toastEl.style.color = col; toastEl.classList.remove('show'); void toastEl.offsetWidth; toastEl.classList.add('show');
+}
+function flash(col, ms = 350) {
+  flashEl.style.transition = 'none'; flashEl.style.background = `radial-gradient(circle at 50% 70%, ${col}, transparent 70%)`; flashEl.style.opacity = 1;
+  requestAnimationFrame(() => { flashEl.style.transition = `opacity ${ms}ms ease-out`; flashEl.style.opacity = 0; });
+}
+let popCount = 0;
+function popup(text, x, y, col) {
+  if (popCount > 12) return;
+  const el = document.createElement('div'); el.className = 'pop'; el.textContent = text; el.style.color = col;
+  el.style.left = toScreenX(x) + 'px'; el.style.top = toScreenY(y) + 'px';
+  document.body.appendChild(el); popCount++;
+  setTimeout(() => { el.remove(); popCount--; }, 900);
+}
+const chipHtml = t => `<span class="g" style="background:${CUR[t].col}">${CUR[t].g}</span>`;
+function renderHUD() {
+  $('#score').textContent = score.toLocaleString();
+  $('#chain').textContent = mult() > 1 ? `×${mult()} chain` : '';
+  $('#lvlLbl').textContent = `Level ${level} of ${LEVELS.length}`;
+  $('#lvlbar').style.width = (1 - breakable / total) * 100 + '%';
+  const lv = $('#lives');
+  lv.innerHTML = Array.from({ length: Math.max(lives, START_LIVES) }, (_, i) => `<i class="${i < lives ? '' : 'off'}"></i>`).join('');
+  lv.setAttribute('aria-label', lives === 1 ? '1 life' : `${lives} lives`);
+  $('#fx').innerHTML = Object.keys(FX).filter(k => fx[k] > 0).map(k =>
+    `<div class="chip">${chipHtml(FX[k].t)}${FX[k].label}<span class="t"><i style="width:${fx[k] / FX[k].max * 100}%;background:${CUR[FX[k].t].col}"></i></span></div>`).join('');
+}
+const coarse = matchMedia('(pointer: coarse)').matches;
+hintEl.textContent = coarse ? 'Tap to launch' : 'Click or press Space to launch';
+
+// How to play: the coin list, and a swatch for each kind of brick.
+$('#paneCoins').innerHTML = '<div class="legend">' + TYPES.map(t => `<div>${chipHtml(t)}${CUR[t].name}<small>${CUR[t].desc}</small></div>`).join('') + '</div>';
+$('#paneBricks').innerHTML = '<div class="legend">' + [
+  [ROW_COLS[1], 'Teal', 'Breaks in one hit'], ['#d9a84e', 'Gold', 'Takes two hits'],
+  ['linear-gradient(135deg,#e3e7ec,#8a929c)', 'Silver', 'Takes three hits'], ['#34404b', 'Steel', 'Never breaks. Bounce around it'],
+].map(([bg, name, note]) => `<div><span class="sw" style="background:${bg}"></span>${name}<small>${note}</small></div>`).join('') + '</div>';
+
+/* ---------- Building a level ---------- */
+function clearField() {
+  bricks.forEach(k => scene.remove(k.mesh)); balls.forEach(b => scene.remove(b.mesh));
+  coins.forEach(c => scene.remove(c.grp)); bolts.forEach(b => scene.remove(b.mesh)); parts.forEach(p => scene.remove(p.mesh));
+  bricks = []; balls = []; coins = []; bolts = []; parts = [];
+}
+function resetPowers() {
+  Object.keys(fx).forEach(k => { fx[k] = 0; });
+  paddle.target = PADDLE_W;
+}
+function serveBall() {
+  const b = makeBall(paddle.x, PADDLE_Y + PADDLE_H / 2 + BALL_R, 0, 1);
+  b.stuck = true; balls.push(b);
+}
+function loadLevel(n) {
+  clearField(); resetPowers();
+  paddle.x = 0; paddle.w = PADDLE_W; ramp = 0; chain = 0; dropMeter = 3;   // so the first coin comes by the third brick
+  setGrid(LEVELS[n - 1][0].length);
+  LEVELS[n - 1].forEach((row, r) => [...row].forEach((ch, c) => {
+    if (ch === '.') return;
+    const k = { x: -HALF_W + CELL / 2 + c * CELL, y: FIRST_ROW_Y - r * ROW_H, row: r, steel: ch === '#', hits: ch === '#' ? 0 : +ch, flash: 0, dead: false };
+    k.mesh = new THREE.Mesh(brickGeo, matFor(k));
+    k.mesh.position.set(k.x, k.y, 0);
+    k.appear = reduceMotion ? 1 : -(r * 0.05 + c * 0.015);   // bricks pop in row by row
+    k.mesh.scale.setScalar(reduceMotion ? 1 : 0.001);
+    scene.add(k.mesh); bricks.push(k);
+  }));
+  breakable = total = bricks.filter(k => !k.steel).length;
+  serveBall();
+}
+
+/* ---------- Bricks breaking, coins dropping ---------- */
+function burst(x, y, mat, n = 8) {
+  for (let i = 0; i < n && parts.length < 220; i++) {
+    const mesh = new THREE.Mesh(partGeo, mat); mesh.position.set(x + rand(-0.35, 0.35), y + rand(-0.15, 0.15), 0); scene.add(mesh);
+    parts.push({ mesh, vx: rand(-3, 3), vy: rand(-1, 4), vz: rand(-1, 3), life: rand(0.45, 0.8), max: 0.8, spin: rand(-8, 8) });
+  }
+}
+function trail(x, y) {
+  if (parts.length >= 220) return;
+  const mesh = new THREE.Mesh(partGeo, fireTrail[Math.floor(Math.random() * fireTrail.length)]);
+  mesh.position.set(x + rand(-0.06, 0.06), y + rand(-0.06, 0.06), -0.05); scene.add(mesh);
+  parts.push({ mesh, vx: rand(-0.4, 0.4), vy: rand(-0.2, 0.6), vz: 0, life: rand(0.3, 0.45), max: 0.45, spin: rand(-6, 6), size: 1.6, g: 0 });
+}
+function pickCoin() {
+  const pool = TYPES.filter(t => t !== 'btc' || lives < MAX_LIVES);
+  let r = Math.random() * pool.reduce((s, t) => s + CUR[t].w, 0);
+  for (const t of pool) { r -= CUR[t].w; if (r <= 0) return t; }
+  return pool[0];
+}
+// Coins all fall at the same speed, so two that start overlapped would spin through each other all the way down.
+// A spot is free when no falling coin is close enough to touch a coin of the largest size dropped there.
+const coinFits = (x, y) => coins.every(c => Math.abs(c.x - x) > c.r + COIN_R * 1.6 + 0.05 || Math.abs(c.y - y) > c.r + COIN_R * 1.6 + 0.05);
+function dropCoin(x, y) {
+  const t = pickCoin(), grp = DouxAssets.makeCoin(t, 'silver'), size = t === 'btc' ? 1.6 : 1.35;   // the sizes Coin Run draws them at
+  grp.scale.setScalar(size); grp.position.set(x, y, 0.3); scene.add(grp);
+  coins.push({ grp, t, x, y, r: COIN_R * size, vy: -2.6, spin: rand(0, Math.PI * 2) });
+}
+function hitBrick(k, fire) {
+  if (k.dead) return;
+  if (k.steel) { k.flash = 0.06; k.mesh.material = MAT.hit; tone(1400, 1000, 0.05, 'square', 0.02); return; }
+  k.hits = fire ? 0 : k.hits - 1;
+  if (k.hits > 0) {
+    score += 10; k.flash = 0.06; k.mesh.material = MAT.hit;
+    burst(k.x, k.y, matFor(k), 3); tone(520, 380, 0.06, 'square', 0.025);
+    return;
+  }
+  k.dead = true; scene.remove(k.mesh);
+  chain++; topChain = Math.max(topChain, mult());
+  const pts = 50 * mult(); score += pts; bricksBroken++;
+  if (mult() > 1) popup('+' + pts, k.x, k.y, '#9a6b12');
+  burst(k.x, k.y, MAT.row[k.row % MAT.row.length], 6);
+  tone(620 + Math.min(chain, 20) * 30, 900 + Math.min(chain, 20) * 30, 0.08, 'triangle', 0.045);
+  // A coin drops about one brick in five, and never more than six bricks apart.
+  dropMeter++;
+  // When the spot is taken, the meter keeps counting and the next brick drops the coin instead.
+  if (coins.length < 4 && coinFits(k.x, k.y) && (Math.random() < 0.2 || dropMeter >= 6)) { dropMeter = 0; dropCoin(k.x, k.y); }
+  breakable--;
+  if (breakable <= 0) levelClear();
+}
+
+/* ---------- Catching a coin ---------- */
+function splitBalls() {
+  const live = balls.filter(b => !b.stuck);
+  if (!live.length) { launchAll(); live.push(...balls); }
+  live.forEach(b => {
+    [-0.42, 0.42].forEach(a => {
+      if (balls.length >= MAX_BALLS) return;
+      const c = Math.cos(a), s = Math.sin(a);
+      balls.push(makeBall(b.x, b.y, b.vx * c - b.vy * s, b.vx * s + b.vy * c));
+    });
+  });
+}
+function collect(c) {
+  const t = c.t, info = CUR[t], power = POWER_OF[t], ink = '#' + new THREE.Color(info.col).multiplyScalar(0.5).getHexString();
+  coinsCaught++; score += 25;
+  if (power) {
+    fx[power] = FX[power].max;
+    if (power === 'wide') paddle.target = PADDLE_WIDE;
+    popup(FX[power].label, paddle.x, PADDLE_Y + 0.8, ink);
+  } else if (t === 'usd') { splitBalls(); popup('Multi-ball', paddle.x, PADDLE_Y + 0.8, ink); }
+  else if (t === 'btc') { lives = Math.min(MAX_LIVES, lives + 1); popup('Extra life', paddle.x, PADDLE_Y + 0.8, ink); flash('rgba(247,197,154,.35)'); }
+  tone(880, 1320, 0.12, 'sine', 0.06); tone(1320, 1760, 0.12, 'sine', 0.05, 0.07);
+}
+
+/* ---------- Ball physics ---------- */
+function launchBall(b) {
+  // A fresh serve leaves at a small random angle. A ball caught by the sticky paddle leaves from where it sits on it.
+  const a = b.caught ? clamp(b.off / (paddle.w / 2), -1, 1) * 1.0 + rand(-0.05, 0.05) : rand(-0.35, 0.35);
+  const sp = ballSpeed();
+  b.vx = Math.sin(a) * sp; b.vy = Math.cos(a) * sp;
+  b.stuck = false; b.caught = false;
+}
+function launchAll() {
+  let any = false;
+  balls.forEach(b => { if (b.stuck) { launchBall(b); any = true; } });
+  if (any) tone(440, 660, 0.08, 'triangle', 0.04);
+}
+function hitPaddle(b) {
+  chain = 0;
+  b.y = PADDLE_Y + PADDLE_H / 2 + BALL_R;
+  if (fx.sticky > 0) { b.stuck = true; b.caught = true; b.off = b.x - paddle.x; b.stuckT = 0; tone(300, 240, 0.06, 'sine', 0.05); return; }
+  // Where the ball lands sets the angle: the centre sends it straight up, the ends out to about 60 degrees.
+  const a = clamp((b.x - paddle.x) / (paddle.w / 2 + BALL_R), -1, 1) * 1.05, sp = ballSpeed();
+  b.vx = Math.sin(a) * sp; b.vy = Math.cos(a) * sp;
+  tone(330, 440, 0.08, 'triangle', 0.05);
+}
+function stepBall(b, dt) {
+  const sp = ballSpeed(), len = Math.hypot(b.vx, b.vy) || 1;
+  b.vx = b.vx / len * sp; b.vy = b.vy / len * sp;
+  // Small steps so a fast ball can never pass through a brick or the paddle between frames.
+  const n = Math.max(1, Math.ceil(sp * dt / 0.07)), h = dt / n, hw = BRICK_W / 2, hh = BRICK_H / 2;
+  for (let i = 0; i < n; i++) {
+    b.x += b.vx * h; b.y += b.vy * h;
+    if (b.x < -HALF_W + BALL_R) { b.x = -HALF_W + BALL_R; b.vx = Math.abs(b.vx); }
+    else if (b.x > HALF_W - BALL_R) { b.x = HALF_W - BALL_R; b.vx = -Math.abs(b.vx); }
+    if (b.y > TOP - BALL_R) { b.y = TOP - BALL_R; b.vy = -Math.abs(b.vy); }
+    if (b.vy < 0 && b.y - BALL_R <= PADDLE_Y + PADDLE_H / 2 && b.y >= PADDLE_Y - PADDLE_H / 2 && Math.abs(b.x - paddle.x) <= paddle.w / 2 + BALL_R) {
+      hitPaddle(b);
+      if (b.stuck) return;
+    }
+    for (const k of bricks) {
+      if (k.dead) continue;
+      const cx = clamp(b.x, k.x - hw, k.x + hw), cy = clamp(b.y, k.y - hh, k.y + hh), dx = b.x - cx, dy = b.y - cy;
+      if (dx * dx + dy * dy > BALL_R * BALL_R) continue;
+      if (fx.fire > 0 && !k.steel) { hitBrick(k, true); if (state !== 'play') return; continue; }   // a fireball carries straight on
+      if (Math.abs(dx) > Math.abs(dy)) { b.vx = Math.sign(dx) * Math.abs(b.vx); b.x = cx + Math.sign(dx) * BALL_R; }
+      else { const s = dy === 0 ? -Math.sign(b.vy) : Math.sign(dy); b.vy = s * Math.abs(b.vy); b.y = cy + s * BALL_R; }
+      hitBrick(k, false);
+      if (state !== 'play') return;
+      break;
+    }
+  }
+  // Never let the ball settle into a near-flat path that bounces wall to wall for ever.
+  const s = Math.hypot(b.vx, b.vy), minVy = s * 0.28;
+  if (Math.abs(b.vy) < minVy) { b.vy = (b.vy < 0 ? -1 : 1) * minVy; b.vx = (b.vx < 0 ? -1 : 1) * Math.sqrt(s * s - minVy * minVy); }
+}
+
+/* ---------- Lives, levels, the end ---------- */
+// Losing a ball is quiet on purpose: a fresh ball simply waits on the paddle.
+// Coins already falling keep falling, so they can still be caught.
+function loseLife() {
+  lives--; chain = 0;
+  bolts.forEach(b => scene.remove(b.mesh)); bolts = [];
+  resetPowers();
+  if (lives <= 0) { gameOver(false); return; }
+  serveBall();
+}
+function levelClear() {
+  state = 'clear'; clearT = 1.9;
+  const bonus = 250 * level; score += bonus;
+  balls.forEach(b => scene.remove(b.mesh)); balls = [];
+  coins.forEach(c => scene.remove(c.grp)); coins = [];
+  bolts.forEach(b => scene.remove(b.mesh)); bolts = [];
+  hintEl.classList.add('hidden');
+  toast('Level clear', '#1f7a5a', `+${bonus.toLocaleString()} bonus`);
+  [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.16, 'triangle', 0.05, i * 0.09));
+}
+function nextLevel() {
+  if (level >= LEVELS.length) { gameOver(true); return; }
+  level++; loadLevel(level); state = 'play';
+  toast(`Level ${level}`);
+}
+function gameOver(won) {
+  state = 'over';
+  hintEl.classList.add('hidden'); hudEl.classList.add('hidden');
+  const isBest = score > best;
+  if (isBest) { best = score; try { localStorage.setItem('brickbreaker_best_v2', best); } catch (e) { /* storage unavailable: the best lasts for this visit */ } }
+  $('#oTitle').textContent = won ? 'Congratulations!' : 'Game over';
+  $('#oSub').textContent = won ? `You cleared all ${LEVELS.length} levels.` : '';
+  $('#oSub').classList.toggle('hidden', !won);
+  $('#oScore').textContent = score.toLocaleString();
+  $('#oBestLine').textContent = isBest && score > 0 ? 'New best score' : best ? `Best ${best.toLocaleString()}` : '';
+  $('#oLevel').textContent = level; $('#oBricks').textContent = bricksBroken; $('#oCoins').textContent = coinsCaught; $('#oChain').textContent = '×' + topChain;
+  $('#oNote').textContent = '';
+  show('#overOv');
+  submitScore();
+}
+
+/* ---------- The frame ---------- */
+function update(dt) {
+  Object.keys(fx).forEach(k => { if (fx[k] > 0) { fx[k] = Math.max(0, fx[k] - dt); if (!fx[k] && k === 'wide') paddle.target = PADDLE_W; } });
+  ramp = Math.min(4, ramp + dt * 0.1);
+
+  // Paddle: keys move it at a steady speed; a finger or mouse puts it straight under the pointer.
+  if (keyDir) { paddle.x += keyDir * 13 * dt; pointerX = null; }
+  else if (pointerX !== null) paddle.x = toWorldX(pointerX);
+  paddle.w += (paddle.target - paddle.w) * Math.min(1, dt * 10);
+  paddle.x = clamp(paddle.x, -HALF_W + paddle.w / 2, HALF_W - paddle.w / 2);
+
+  if (fx.laser > 0 && (laserCd -= dt) <= 0) {
+    laserCd = 0.38;
+    [-1, 1].forEach(s => {
+      const mesh = new THREE.Mesh(boltGeo, boltMat), x = paddle.x + s * (paddle.w / 2 - PADDLE_H / 2);
+      mesh.position.set(x, PADDLE_Y + 0.3, 0); scene.add(mesh); bolts.push({ mesh, x, y: PADDLE_Y + 0.3 });
+    });
+    tone(1500, 600, 0.06, 'square', 0.012);
+  }
+
+  for (const b of balls.slice()) {
+    if (b.stuck) {
+      b.x = paddle.x + (b.caught ? b.off : 0); b.y = PADDLE_Y + PADDLE_H / 2 + BALL_R;
+      if (b.caught && (b.stuckT += dt) > 2.5) launchBall(b);   // a caught ball does not wait for ever
+      continue;
+    }
+    stepBall(b, dt);
+    if (state !== 'play') return;
+    if (fx.fire > 0 && (b.trailT -= dt) <= 0) { b.trailT = 0.015; trail(b.x, b.y); }
+    if (b.y < BOTTOM - 0.4) { scene.remove(b.mesh); balls.splice(balls.indexOf(b), 1); }
+  }
+  if (!balls.length) { loseLife(); if (state !== 'play') return; }
+
+  for (const bolt of bolts.slice()) {
+    bolt.y += 14 * dt; let gone = bolt.y > TOP;
+    for (const k of bricks) {
+      if (gone) break;
+      if (!k.dead && Math.abs(bolt.x - k.x) <= BRICK_W / 2 + 0.03 && Math.abs(bolt.y - k.y) <= BRICK_H / 2 + 0.17) { hitBrick(k, false); gone = true; }
+    }
+    if (state !== 'play') return;
+    if (gone) { scene.remove(bolt.mesh); bolts.splice(bolts.indexOf(bolt), 1); } else bolt.mesh.position.y = bolt.y;
+  }
+
+  for (const c of coins.slice()) {
+    c.y += c.vy * dt; c.spin += dt * 3.2;
+    c.grp.position.set(c.x, c.y, 0.3); c.grp.userData.disc.rotation.y = c.spin;
+    const caught = c.y - c.r <= PADDLE_Y + PADDLE_H / 2 && c.y + c.r >= PADDLE_Y - PADDLE_H / 2 && Math.abs(c.x - paddle.x) <= paddle.w / 2 + c.r * 0.6;
+    if (caught) collect(c);
+    if (caught || c.y < BOTTOM - 1) { scene.remove(c.grp); coins.splice(coins.indexOf(c), 1); }
+  }
+
+  bricks.forEach(k => { if (k.flash > 0 && (k.flash -= dt) <= 0 && !k.dead) k.mesh.material = matFor(k); });
+  if (bricks.some(k => k.dead)) bricks = bricks.filter(k => !k.dead);
+
+  hintEl.classList.toggle('hidden', !balls.some(b => b.stuck && !b.caught));
+}
+function updateEffects(dt) {
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i]; p.life -= dt;
+    if (p.life <= 0) { scene.remove(p.mesh); parts.splice(i, 1); continue; }
+    p.vy -= (p.g ?? 9) * dt;
+    p.mesh.position.x += p.vx * dt; p.mesh.position.y += p.vy * dt; p.mesh.position.z += p.vz * dt;
+    p.mesh.rotation.x += p.spin * dt; p.mesh.rotation.y += p.spin * dt;
+    p.mesh.scale.setScalar(Math.max(0.01, p.life / p.max * (p.size || 1)));
+  }
+  bricks.forEach(k => {
+    if (k.appear >= 1) return;
+    k.appear += dt * 3.5;
+    const t = clamp(k.appear, 0, 1), e = 1 + 2.2 * Math.pow(t - 1, 3) + 1.2 * Math.pow(t - 1, 2);   // ease out with a small overshoot
+    k.mesh.scale.setScalar(Math.max(0.001, t === 0 ? 0.001 : e));
+  });
+  for (let i = 0; i < STAR_N; i++) { starPos[i * 3 + 1] -= dt * 0.25; if (starPos[i * 3 + 1] < -32) starPos[i * 3 + 1] += 64; }
+  starGeo.attributes.position.needsUpdate = true;
+}
+function syncMeshes(dt) {
+  paddle.sync(fx.laser > 0, dt);
+  const fire = fx.fire > 0;
+  balls.forEach(b => {
+    b.mesh.position.set(b.x, b.y, 0);
+    b.mesh.material = fire ? fireMat : ballMat; b.halo.material = fire ? haloFire : haloPlain;
+    b.mesh.scale.setScalar(fire ? 1.25 : 1);   // bigger only to the eye: collisions still use BALL_R
+  });
+}
+
+let last = performance.now(), hudT = 0;
+function loop(now) {
+  const dt = Math.min(0.033, (now - last) / 1000); last = now;
+  if (state === 'play') update(dt);
+  else if (state === 'clear' && (clearT -= dt) <= 0) nextLevel();
+  if (state !== 'paused') {
+    updateEffects(dt);
+    if (state === 'menu') paddle.x = Math.sin(now / 900) * 2.2;   // the paddle drifts behind the menu
+    else if (state === 'clear') { paddle.w += (PADDLE_W - paddle.w) * Math.min(1, dt * 10); }
+    paddle.x = clamp(paddle.x, -HALF_W + paddle.w / 2, HALF_W - paddle.w / 2);
+    if (state === 'menu') balls.forEach(b => { b.x = paddle.x; });
+  }
+  syncMeshes(dt);
+  if ((state === 'play' || state === 'clear') && (hudT -= dt) <= 0) { hudT = 0.1; renderHUD(); }
+  if (composer) composer.render(); else renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+
+/* ---------- Input ---------- */
+let pointerX = null, armed = false, keyDir = 0;
+const held = new Set();
+canvas.addEventListener('pointerdown', e => {
+  initAudio();
+  if (state !== 'play') return;
+  armed = true; pointerX = e.clientX;
+});
+addEventListener('pointermove', e => { if (state === 'play' && (e.pointerType === 'mouse' || armed)) pointerX = e.clientX; });
+// Lifting the finger (or releasing the click) launches, so a drag to aim followed by letting go sends the ball.
+addEventListener('pointerup', () => { if (armed && state === 'play') launchAll(); armed = false; });
+addEventListener('pointercancel', () => { armed = false; });
+const dirKeys = { ArrowLeft: -1, a: -1, A: -1, ArrowRight: 1, d: 1, D: 1 };
+addEventListener('keydown', e => {
+  if (e.target instanceof HTMLInputElement) return;   // typing a name: A, D and the arrows are letters there, not paddle moves
+  if (dirKeys[e.key]) { held.add(e.key); keyDir = clamp([...held].reduce((s, k) => s + dirKeys[k], 0), -1, 1); e.preventDefault(); return; }
+  if ((e.key === ' ' || e.key === 'ArrowUp') && state === 'play') { initAudio(); launchAll(); e.preventDefault(); return; }
+  if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && (state === 'play' || state === 'paused')) { state === 'play' ? pause() : resume(); }
+});
+addEventListener('keyup', e => {
+  if (dirKeys[e.key]) { held.delete(e.key); keyDir = clamp([...held].reduce((s, k) => s + dirKeys[k], 0), -1, 1); }
+});
+addEventListener('blur', () => { held.clear(); keyDir = 0; armed = false; });
+document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') pause(); });
+
+/* ---------- Screens ---------- */
+const OVERLAYS = ['#menu', '#helpOv', '#setOv', '#pauseOv', '#overOv', '#nameOv', '#boardOv'];
+let backTo = '#menu';
+function show(id) { OVERLAYS.forEach(o => $(o).classList.toggle('hidden', o !== id)); }
+function startGame() {
+  initAudio();
+  score = 0; lives = START_LIVES; level = 1; bricksBroken = 0; coinsCaught = 0; topChain = 1;
+  show(null); hudEl.classList.remove('hidden'); resize();
+  loadLevel(1); state = 'play'; hudT = 0;
+  toast('Level 1');
+}
+function toMenu() {
+  state = 'menu'; hudEl.classList.add('hidden'); hintEl.classList.add('hidden');
+  level = 1; loadLevel(1); resize();
+  show('#menu'); menuStats(); loadBoard();
+}
+function pause() { state = 'paused'; armed = false; hintEl.classList.add('hidden'); show('#pauseOv'); }
+function resume() { show(null); state = 'play'; last = performance.now(); }
+
+/* ---------- Player name and shared leaderboard ---------- */
+// Same Supabase project as Coin Run. The key is the public (anon) one: it is meant to ship in the page.
+// The database lets it read the boards, and claim a name or post a score only through the arcade_ functions.
+// Left empty, the game keeps to this device: no name is asked for and the Leaderboard button is hidden.
+const LB = { url: '', key: '' };   // your Supabase project URL and publishable key; see the README
+const lbOn = () => !!(LB.url && LB.key);
+const NAME_OK = /^[A-Za-z0-9 _-]{2,16}$/;
+// Arcade name: one per player across every Doux Arcade game, and no one else can take it. This browser's secret key,
+// kept in a cookie, is what proves the name is yours. There is no sign-in.
+// When the games live on different subdomains of one site, set COOKIE_DOMAIN to that site (for example 'example.com')
+// in every game so they share the cookie. Left empty, the cookie stays on this address.
+const COOKIE_DOMAIN = '';
+const KEY_NAME = 'doux_player', KEY_OK = /^[a-f0-9]{64}$/;
+function playerKey() {
+  const m = document.cookie.match(/(?:^|; )doux_player=([a-f0-9]{64})/);
+  let key = m ? m[1] : '';
+  if (!key) { try { key = localStorage.getItem(KEY_NAME) || ''; } catch (e) { key = ''; } }   // the cookie was cleared but this game kept a copy
+  if (!KEY_OK.test(key)) key = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
+  const shared = COOKIE_DOMAIN && (location.hostname === COOKIE_DOMAIN || location.hostname.endsWith('.' + COOKIE_DOMAIN)) ? '; domain=' + COOKIE_DOMAIN : '';
+  document.cookie = `${KEY_NAME}=${key}; path=/; max-age=34560000; samesite=lax${location.protocol === 'https:' ? '; secure' : ''}${shared}`;
+  try { localStorage.setItem(KEY_NAME, key); } catch (e) { /* storage unavailable: the cookie alone carries it */ }
+  return key;
+}
+const PLAYER_KEY = playerKey();
+let playerName = '';
+try { playerName = localStorage.getItem('brickbreaker_name_v2') || ''; } catch (e) { playerName = ''; }   // last known name, until the database confirms it
+let board = { state: 'idle', rows: [] };   // idle | loading | ready | error
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function lbFetch(path, init = {}) {
+  const res = await fetch(LB.url + '/rest/v1/' + path, { ...init, headers: { apikey: LB.key, Authorization: 'Bearer ' + LB.key, 'Content-Type': 'application/json', ...init.headers } });
+  if (!res.ok) throw new Error('Leaderboard request failed: ' + res.status);
+  return res;
+}
+async function rpc(fn, args) { return (await lbFetch('rpc/' + fn, { method: 'POST', body: JSON.stringify(args) })).json(); }
+function rememberName(name) {
+  playerName = name;
+  try { name ? localStorage.setItem('brickbreaker_name_v2', name) : localStorage.removeItem('brickbreaker_name_v2'); } catch (e) { /* storage unavailable: the name lasts for this visit */ }
+  $('#sNameVal').textContent = name || 'Not set';
+}
+// Pick up a name claimed in another arcade game, or drop one this browser no longer owns.
+if (lbOn()) rpc('arcade_whoami', { p_token: PLAYER_KEY }).then(name => rememberName(name || '')).catch(() => { /* offline: keep the last known name */ });
+async function loadBoard() {
+  if (!lbOn()) return;
+  board = { state: 'loading', rows: board.rows }; menuStats();
+  try {
+    const res = await lbFetch('brick_leaderboard?select=player_name,score,level&order=score.desc&limit=10');
+    board = { state: 'ready', rows: await res.json() };
+  } catch (e) { board = { state: 'error', rows: [] }; }
+  menuStats();
+}
+async function submitScore() {
+  if (!lbOn() || !playerName || score <= 0) return;
+  let result = '';
+  try { result = await rpc('arcade_submit_score', { p_token: PLAYER_KEY, p_game: 'brick_breaker', p_score: score, p_level: level }); } catch (e) { result = 'offline'; }
+  if (result === 'no_player') { rememberName(''); $('#oNote').textContent = 'Pick a name in Settings to get on the leaderboard.'; }
+  else if (result !== 'ok') $('#oNote').textContent = "Couldn't reach the leaderboard, so this score wasn't added. Your best is saved on this device.";
+}
+function menuStats() {
+  $('#sNameVal').textContent = playerName || 'Not set';
+  const row = (rank, a, b) => `<li><span>${rank}</span><b>${a}</b><span>${b}</span></li>`;
+  let html = '';
+  if (board.state === 'ready' && !board.rows.length) html = '<li class="msg">No scores yet. Be the first.</li>';
+  else if (board.state === 'error') html = '<li class="msg">Couldn\'t load the leaderboard. Check your connection and try again.</li>';
+  else if (!board.rows.length) html = '<li class="msg">Loading scores…</li>';
+  else html = board.rows.map((r, i) => row(i + 1, esc(r.player_name), Number(r.score).toLocaleString())).join('');
+  $('#scoreList').innerHTML = html;
+  $('#bBoardRetry').classList.toggle('hidden', board.state !== 'error');
+  const notes = [];
+  if (best) notes.push(`Your best is ${best.toLocaleString()}.`);
+  $('#menuStats').textContent = notes.join(' ');
+}
+let nameThen = 'play';
+function openName(then) {
+  nameThen = then; show('#nameOv'); $('#nameErr').textContent = '';
+  $('#nameIn').value = playerName; $('#nameIn').focus();
+}
+function closeName() { show(nameThen === 'settings' ? '#setOv' : '#menu'); }
+$('#bNameBack').onclick = closeName;
+$('#sName').onclick = () => openName('settings');
+$('#nameForm').onsubmit = async e => {
+  e.preventDefault();
+  const name = $('#nameIn').value.trim().replace(/\s+/g, ' '), err = $('#nameErr'), go = $('#nameGo');
+  if (!NAME_OK.test(name)) { err.textContent = 'Use 2 to 16 letters, numbers or spaces.'; $('#nameIn').focus(); return; }
+  if (lbOn()) {
+    err.textContent = ''; go.disabled = true; go.textContent = 'Checking…';
+    let result = '';
+    try { result = await rpc('arcade_claim_name', { p_token: PLAYER_KEY, p_name: name }); } catch (e2) { result = 'offline'; }
+    go.disabled = false; go.textContent = 'Continue';
+    if (result === 'taken') { err.textContent = 'Someone already has that name. Try another.'; $('#nameIn').focus(); return; }
+    if (result !== 'ok') { err.textContent = "Couldn't reach the leaderboard to save your name. Check your connection and try again."; return; }
+  }
+  rememberName(name);
+  if (nameThen === 'play') startGame(); else closeName();
+};
+
+$('#bStart').onclick = () => (playerName || !lbOn() ? startGame() : openName('play'));   // no board, no name to ask for
+$('#bAgain').onclick = startGame;
+$('#bOverMenu').onclick = toMenu;
+$('#bQuit').onclick = toMenu;
+$('#bPause').onclick = () => { if (state === 'play') pause(); };
+$('#bResume').onclick = resume;
+$('#bHelp').onclick = () => { backTo = '#menu'; show('#helpOv'); };
+$('#bPauseHelp').onclick = () => { backTo = '#pauseOv'; show('#helpOv'); };
+$('#bSet').onclick = () => { backTo = '#menu'; show('#setOv'); };
+$('#bPauseSet').onclick = () => { backTo = '#pauseOv'; show('#setOv'); };
+$('#bHelpClose').onclick = () => show(backTo);
+$('#bSetClose').onclick = () => show(backTo);
+$('#bBoard').onclick = () => { show('#boardOv'); loadBoard(); };
+$('#bBoard').classList.toggle('hidden', !lbOn());
+$('#bBoardRetry').onclick = loadBoard;
+$('#bBoardClose').onclick = () => show('#menu');
+
+const TABS = [['#tabControls', '#paneControls'], ['#tabCoins', '#paneCoins'], ['#tabBricks', '#paneBricks']];
+TABS.forEach(([tab]) => {
+  $(tab).onclick = () => TABS.forEach(([t, p]) => { $(t).setAttribute('aria-selected', t === tab); $(p).classList.toggle('hidden', t !== tab); });
+});
+function syncToggles() {
+  [['#sSound', 'sound']].forEach(([id, k]) => {
+    $(id).setAttribute('aria-pressed', settings[k]); $(id).querySelector('span').textContent = settings[k] ? 'On' : 'Off';
+  });
+}
+$('#sSound').onclick = () => { settings.sound = !settings.sound; save('brickbreaker_settings', settings); syncToggles(); };
+syncToggles();
+
+toMenu();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
