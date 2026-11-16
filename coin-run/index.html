@@ -1,0 +1,1821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Coin Run</title>
+<meta property="og:title" content="Coin Run">
+<meta property="og:description" content="Fly the ship, collect the coins, beat the boss drones.">
+<meta name="description" content="Coin Run by Doux. Fly the ship, collect the coins, beat the boss drones.">
+<meta name="theme-color" content="#021616">
+<style>
+/* Noir Pro Light for every weight the page asks for, so nothing is faked bold. */
+@font-face{font-family:'Grozel';src:url('fonts/Grozel.woff2') format('woff2');font-display:swap}
+@font-face{font-family:'Noir Pro';src:url('fonts/NoirPro-Light.otf') format('opentype');font-weight:100 900;font-display:swap}
+:root{--teal:#064343;--cream:#F8F3E9;--ink:#021616;--muted:rgba(248,243,233,.66);--line:rgba(248,243,233,.14);--soft:rgba(248,243,233,.05);--gold:#f3dc9a;--green:#9be3b4;--danger:#ff5a3a}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--ink);color:var(--cream);font-family:'Noir Pro','Reddit Sans',system-ui,sans-serif;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+h1,h2,h3{text-wrap:balance;line-height:1.1}
+p,li,.note{text-wrap:pretty}
+canvas{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none}
+.hidden{display:none!important}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--cream);outline-offset:2px}
+
+/* coin chip: one centred symbol on a coloured disc */
+.g{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;font:700 13px/1 Arial,system-ui,sans-serif;color:#06201f;flex:none}
+.g svg{display:block}
+
+/* ---------- in-game display ---------- */
+#hud{position:fixed;inset:0;pointer-events:none;touch-action:none;padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom))}
+.hud-top{display:grid;grid-template-columns:1fr minmax(0,150px) 1fr;align-items:start;gap:10px}
+#score{font-size:26px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+#mult{margin-top:6px;height:18px;white-space:nowrap;font-size:13px;font-weight:700;color:var(--gold);display:flex;align-items:center;gap:7px}
+#mult i{display:block;width:44px;height:3px;border-radius:2px;background:rgba(245,197,66,.25);overflow:hidden}
+#mult i b{display:block;height:100%;background:var(--gold)}
+.hud-level{text-align:center;padding-top:3px}
+#lvlLbl{font-size:13px;font-weight:700}
+.bar{height:5px;background:var(--line);border-radius:3px;margin-top:7px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--cream);border-radius:3px}
+.hud-right{display:flex;justify-content:flex-end;align-items:center;gap:8px}
+#hull{display:flex;gap:3px}
+#hull svg{width:18px;height:18px;display:block}
+.ibtn{pointer-events:auto;width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:rgba(2,22,22,.55);display:grid;place-items:center}
+.hud-bl{position:absolute;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));display:grid;gap:8px}
+#fx{display:grid;gap:5px}
+/* one coloured bar per active power-up; it empties as the power-up runs out */
+.chip{width:76px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+.chip i{display:block;height:100%;border-radius:3px}
+.power{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--muted)}
+#pips{display:flex;gap:3px}
+#pips i{display:block;width:16px;height:7px;border-radius:2px;background:var(--line);overflow:hidden}
+#pips i b{display:block;height:100%;background:var(--cream)}
+.hud-br{position:absolute;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));display:grid;justify-items:end;gap:10px}
+/* Ghost sits on top of Doux charge so both fit the corner */
+.acts{display:flex;flex-direction:column;align-items:center;gap:8px}
+.dash{pointer-events:auto;width:48px;height:48px;border-radius:50%;border:2px solid rgba(248,243,233,.2);background:rgba(2,22,22,.6);font-size:12px;font-weight:800;color:var(--muted)}
+.dash.ready{border-color:var(--cream);color:var(--teal);background:var(--cream)}
+.doux{pointer-events:auto;position:relative;width:64px;height:64px;border-radius:50%;border:0;background:rgba(2,22,22,.6);display:grid;place-items:center;font-size:13px;font-weight:800;line-height:1.05;color:var(--muted)}
+.doux svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.doux circle{fill:none;stroke-width:5}
+.doux .track{stroke:rgba(155,227,180,.2)}
+.doux .fill{stroke:var(--green);stroke-linecap:round;transition:stroke-dashoffset .25s}
+.doux small{display:block;font-size:10px;font-weight:600}
+.doux.ready{background:var(--green);color:#04120a;box-shadow:0 0 22px rgba(155,227,180,.7)}
+@keyframes pulse{50%{transform:scale(1.07)}}
+@media (prefers-reduced-motion:no-preference){.doux.ready{animation:pulse 1.1s ease-in-out infinite}}
+
+#toast{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);width:min(92vw,520px);font-size:26px;font-weight:800;line-height:1.1;pointer-events:none;text-align:center;opacity:0;text-shadow:0 2px 14px rgba(2,22,22,.95);text-transform:lowercase;text-wrap:balance}
+#toast::first-letter{text-transform:uppercase}
+#toast small{display:block;font-size:14px;font-weight:600;margin-top:6px;opacity:.9}
+#toast small::first-letter{text-transform:uppercase}
+#toast.show{animation:toast 1.7s ease-out}
+@keyframes toast{0%{opacity:0;transform:translate(-50%,-30%) scale(.9)}15%{opacity:1;transform:translate(-50%,-50%) scale(1)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-70%)}}
+#flash{position:fixed;inset:0;pointer-events:none;opacity:0}
+.pop{position:fixed;pointer-events:none;font-weight:800;font-size:15px;transform:translate(-50%,-50%);animation:pop .9s ease-out forwards;text-shadow:0 1px 8px rgba(2,22,22,.9);white-space:nowrap}
+@keyframes pop{to{transform:translate(-50%,-190%);opacity:0}}
+
+/* ---------- menus ---------- */
+.ov{position:fixed;inset:0;display:grid;place-items:center;overflow:auto;touch-action:pan-y;background:rgba(2,22,22,.84);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom))}
+#menu{background:rgba(2,22,22,.9);-webkit-backdrop-filter:none;backdrop-filter:none}
+.panel{width:100%;max-width:400px;text-align:center}
+.card{background:rgba(4,34,34,.92);border:1px solid var(--line);border-radius:24px;padding:32px 20px 24px}
+.logo{width:68px;height:68px;margin:0 auto 14px;display:block}
+h1{font-family:'Grozel','Noir Pro',sans-serif;font-size:46px;font-weight:400;letter-spacing:.02em}
+h2{font-size:28px;font-weight:800}
+h3{font-size:16px;font-weight:700;margin:24px 0 10px}
+.sub{color:var(--muted);font-size:16px;line-height:1.45;margin-top:10px}
+.note{color:var(--muted);font-size:14px;margin-top:14px;min-height:20px}
+.arcade{pointer-events:auto;display:inline-flex;align-items:center;gap:6px;min-height:44px;margin-top:14px;padding:0 10px;color:var(--muted);font-size:15px;font-weight:700;text-decoration:none}
+.arcade:focus-visible{outline:2px solid currentColor;outline-offset:2px;border-radius:8px}
+.legal{font-size:13px;line-height:1.45;margin-top:8px;opacity:.8}
+.ver{margin-top:6px;min-height:0}
+.stack{display:grid;gap:10px;margin-top:22px}
+.btn{pointer-events:auto;display:block;width:100%;min-height:52px;padding:0 20px;border-radius:999px;border:1px solid var(--cream);background:var(--cream);color:var(--teal);font-size:17px;font-weight:700}
+.btn.ghost{background:transparent;border-color:rgba(248,243,233,.3);color:var(--cream)}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.6;cursor:default}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.scores{margin-top:20px;text-align:left}
+#boardNote:empty{display:none}
+.scores ol{list-style:none;display:grid;gap:4px}
+.scores li{display:grid;grid-template-columns:20px 1fr auto;gap:10px;align-items:baseline;min-height:52px;align-content:center;padding:10px 12px;border-radius:12px;background:var(--soft);font-size:14px;color:var(--muted)}
+.scores li b{font-size:16px;color:var(--cream);font-variant-numeric:tabular-nums}
+
+.scores li.msg{display:flex;align-items:center;justify-content:center;text-align:center}
+.field{display:block;text-align:left;margin-top:20px;font-size:14px;font-weight:600;color:var(--muted)}
+.field input{display:block;width:100%;min-height:52px;margin-top:8px;padding:0 16px;border-radius:14px;border:1px solid rgba(248,243,233,.3);background:var(--soft);color:var(--cream);font:inherit;font-size:17px;font-weight:600;user-select:text;-webkit-user-select:text}
+.field input:focus-visible{outline:2px solid var(--cream);outline-offset:2px}
+.err{color:#ff8a7a;font-size:14px;font-weight:600;min-height:20px;margin-top:8px;text-align:left}
+.help{text-align:left;max-width:480px}
+.tabs{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;margin-top:20px;padding:4px;border-radius:14px;background:var(--soft)}
+.tab{min-height:44px;border:0;border-radius:10px;background:transparent;font-size:15px;font-weight:700;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--cream);color:var(--teal)}
+.pane{margin-top:16px}
+.pane h3:first-child{margin-top:4px}
+.facts{list-style:none;display:grid;gap:6px}
+.facts li{background:var(--soft);border-radius:12px;padding:12px 14px;font-size:15px;line-height:1.4;color:var(--muted)}
+.facts b{display:block;color:var(--cream);font-size:15px;margin-bottom:2px}
+.legend{display:grid;gap:6px}
+.legend div{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;align-items:center;background:var(--soft);border-radius:12px;padding:10px 12px;font-weight:700;font-size:15px}
+.legend .g{grid-row:span 2;width:32px;height:32px;font-size:17px}
+.legend small{color:var(--muted);font-size:13px;font-weight:500}
+@media (min-width:768px){.legend{grid-template-columns:1fr 1fr}}
+.toggles{display:grid;gap:6px}
+.tog{pointer-events:auto;display:flex;justify-content:space-between;align-items:center;width:100%;min-height:48px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--soft);font-weight:600;font-size:15px}
+.tog span{font-weight:700;color:var(--muted)}
+.tog[aria-pressed="true"] span{color:var(--green)}
+.help .btn{margin-top:24px}
+
+.score{margin-top:18px;font-size:54px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.score + .note{margin-top:8px}
+.bestline{color:var(--cream);font-weight:700;font-size:15px;min-height:22px;margin-top:14px}
+.fun{color:var(--muted);font-size:13px;line-height:1.5;max-width:30ch;margin:18px auto 0;padding-top:16px;border-top:1px solid var(--line);text-wrap:balance}
+.fun:empty{display:none}
+#overWallet{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 14px;margin-top:14px;font-weight:700;font-size:14px}
+#overWallet > span{display:flex;align-items:center;gap:6px}
+.card .stack{margin-top:28px;gap:12px}
+.card .row2{gap:12px}
+#oNote:not(:empty){margin-top:20px}
+
+@media (max-width:767px){.hud-right{flex-direction:column-reverse;align-items:flex-end}}
+@media (min-width:768px){
+  #hud{padding:20px}
+  .hud-top{grid-template-columns:1fr minmax(0,260px) 1fr}
+  #score{font-size:34px}
+  .hud-bl{left:20px;bottom:20px}
+  .hud-br{right:20px;bottom:20px}
+  #toast{font-size:36px}
+  #toast small{font-size:16px}
+  h1{font-size:60px}
+  .card{padding:40px 32px 32px}
+}
+@media (max-height:560px){
+  .score{font-size:36px}
+  .logo{width:44px;height:44px;margin-bottom:8px}
+  h1{font-size:34px}
+  .stack{margin-top:14px}
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" class="hidden">
+  <div class="hud-top">
+    <div><div id="score">0</div><div id="mult"></div></div>
+    <div class="hud-level"><div id="lvlLbl">Level 1</div><div class="bar"><i id="lvlbar"></i></div></div>
+    <div class="hud-right">
+      <div id="hull" role="img" aria-label="Hull points"></div>
+      <button id="bPause" class="ibtn" aria-label="Pause"><svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true"><rect width="4" height="16" rx="1.5" fill="currentColor"/><rect x="10" width="4" height="16" rx="1.5" fill="currentColor"/></svg></button>
+    </div>
+  </div>
+  <div class="hud-bl"><div id="fx"></div><div class="power"><span id="pw">Firepower</span><div id="pips"></div></div></div>
+  <div class="hud-br">
+    <div class="acts">
+    <button id="bDash" class="dash" aria-label="Ghost">Ghost</button>
+    <button id="bNova" class="doux" aria-label="Doux charge">
+      <svg viewBox="0 0 76 76" aria-hidden="true"><circle class="track" cx="38" cy="38" r="34"/><circle class="fill" id="douxRing" cx="38" cy="38" r="34" stroke-dasharray="213.6" stroke-dashoffset="213.6"/></svg>
+      <span>Doux<small id="douxLbl">charge</small></span>
+    </button>
+    </div>
+  </div>
+</div>
+<div id="toast" aria-live="polite"></div>
+<div id="flash"></div>
+
+<div id="menu" class="ov">
+  <div class="panel">
+    <svg class="logo" viewBox="0 0 12772 13057" aria-hidden="true"><defs><linearGradient id="lg" x1="6789" y1="1920" x2="6790" y2="10445" gradientUnits="userSpaceOnUse"><stop stop-color="#F8F3E9"/><stop offset=".616" stop-color="#9fc2b6"/><stop offset="1" stop-color="#F8F3E9"/></linearGradient></defs><path id="logoPath" fill="url(#lg)" d=""/></svg>
+    <h1>Coin Run</h1>
+    <p class="sub">Collect Doux coins to build firepower.</p>
+    <div class="stack">
+      <button class="btn" id="bStart">Play</button>
+      <div class="row2"><button class="btn ghost" id="bHelp">How to play</button><button class="btn ghost" id="bSet">Settings</button></div>
+      <button class="btn ghost" id="bBoard">Leaderboard</button>
+    </div>
+    <p class="note" id="menuStats"></p>
+    <a class="arcade" href="../"><svg width="14" height="14" viewBox="0 0 18 18" aria-hidden="true"><path d="M11 3L5 9l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Go to Doux Arcade</a>
+    <p class="note legal">Coin Run is just for fun. Points and coins have no real value, and nothing here is financial advice.</p>
+    <p class="note legal ver">Version 1.0</p>
+  </div>
+</div>
+
+<div id="helpOv" class="ov hidden">
+  <div class="panel card help">
+    <h2>How to play</h2>
+    <p class="sub">Shoot what comes at you, grab the coins it drops, and beat the boss drone at the end of each level.</p>
+    <div class="tabs" role="tablist" aria-label="How to play sections">
+      <button class="tab" role="tab" id="tabControls" aria-controls="paneControls" aria-selected="true">Controls</button>
+      <button class="tab" role="tab" id="tabCoins" aria-controls="paneCoins" aria-selected="false">Coins</button>
+      <button class="tab" role="tab" id="tabEnemies" aria-controls="paneEnemies" aria-selected="false">Enemies</button>
+    </div>
+    <div class="pane" role="tabpanel" id="paneControls" aria-labelledby="tabControls">
+      <ul class="facts">
+        <li><b>Move</b>Drag on a phone. Mouse, arrow keys or WASD on a computer.</li>
+        <li><b>Fire</b>Automatic. You can switch that off in Settings and fire with Space or a held click.</li>
+        <li><b>Doux charge</b>Six Naira fill it. Tap it, or press B, to clear the screen.</li>
+        <li><b>Ghost</b>Tap Ghost, or press Shift, and nothing can hit you while the ship is see-through. It takes four seconds to recharge.</li>
+        <li><b>Hull</b>You have three hull points. Every hit also costs one firepower level.</li>
+      </ul>
+    </div>
+    <div class="pane hidden" role="tabpanel" id="paneCoins" aria-labelledby="tabCoins"></div>
+    <div class="pane hidden" role="tabpanel" id="paneEnemies" aria-labelledby="tabEnemies">
+      <ul class="facts">
+        <li><b>Rocks</b>Take a few hits. Big ones split in two.</li>
+        <li><b>Drones</b>Hover and fire at you, then dive. Heavy ones fire three shots at once, and small ones come in swarms.</li>
+        <li><b>Gold runner</b>Streaks across the top. Catch it for a Bitcoin.</li>
+        <li><b>Boss drone</b>One at the end of every level, each with its own attacks. Shots that hit its glowing eye do double damage.</li>
+      </ul>
+    </div>
+    <button class="btn" id="bHelpClose">Done</button>
+  </div>
+</div>
+
+<div id="setOv" class="ov hidden">
+  <div class="panel card help">
+    <h2>Settings</h2>
+    <h3>Game</h3>
+    <div class="toggles">
+      <button class="tog" id="sSound" aria-pressed="true">Sound <span>On</span></button>
+      <button class="tog" id="sAuto" aria-pressed="true">Auto-fire <span>On</span></button>
+      <button class="tog" id="sHaptics" aria-pressed="true">Vibration <span>On</span></button>
+    </div>
+    <h3>Player</h3>
+    <div class="toggles">
+      <button class="tog" id="sName">Player name <span id="sNameVal">Not set</span></button>
+    </div>
+    <button class="btn" id="bSetClose">Done</button>
+  </div>
+</div>
+
+<div id="boardOv" class="ov hidden">
+  <div class="panel card help">
+    <h2 id="scoresTitle">Leaderboard</h2>
+    <div class="scores"><ol id="scoreList"></ol></div>
+    <p class="note" id="boardNote" role="status"></p>
+    <button class="btn" id="bBoardClose">Done</button>
+  </div>
+</div>
+
+<div id="nameOv" class="ov hidden">
+  <form class="panel card" id="nameForm" novalidate>
+    <h2>What should we call you?</h2>
+    <p class="sub">Your name and best score appear on the leaderboard. The name is yours in every Doux Arcade game.</p>
+    <label class="field">Player name<input id="nameIn" type="text" maxlength="16" autocomplete="nickname" autocapitalize="words" spellcheck="false"></label>
+    <p class="err" id="nameErr" role="alert"></p>
+    <div class="stack">
+      <button class="btn" type="submit" id="nameGo">Continue</button>
+      <button class="btn ghost" type="button" id="bNameBack">Back</button>
+    </div>
+  </form>
+</div>
+
+<div id="pauseOv" class="ov hidden">
+  <div class="panel card">
+    <h2>Paused</h2>
+    <div class="stack">
+      <button class="btn" id="bResume">Resume</button>
+      <div class="row2"><button class="btn ghost" id="bPauseHelp">How to play</button><button class="btn ghost" id="bPauseSet">Settings</button></div>
+      <button class="btn ghost" id="bQuit">Quit to menu</button>
+    </div>
+  </div>
+</div>
+
+<div id="overOv" class="ov hidden">
+  <div class="panel card">
+    <h2 id="oTitle">Ship down</h2>
+    <div id="oScore" class="score">0</div>
+    <p class="note">points</p>
+    <p id="oBestLine" class="bestline"></p>
+    <div id="overWallet"></div>
+    <p id="oFun" class="fun"></p>
+    <div class="stack">
+      <button class="btn" id="bAgain">Play again</button>
+      <div class="row2"><button class="btn ghost" id="bShare">Share</button><button class="btn ghost" id="bOverMenu">Menu</button></div>
+    </div>
+    <p class="note" id="oNote" role="status"></p>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/CopyShader.js"></script>
+<script src="vendor/LuminosityHighPassShader.js"></script>
+<script src="vendor/EffectComposer.js"></script>
+<script src="vendor/RenderPass.js"></script>
+<script src="vendor/ShaderPass.js"></script>
+<script src="vendor/UnrealBloomPass.js"></script>
+<script src="doux-assets.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* ---------- Data ---------- */
+const LOGO_D = "M1169.98 6623.36C1983.5 5577.41 4390.15 2458.92 5491.79 1030.42C6545.01 -531.235 7126.09 25.894 7489.27 485.66C8627.22 1926.27 11077.5 5054.44 12210.6 6623.36C13627 8584.53 12065.3 9746.7 10794.2 11925.8C9777.28 13669 8941.97 13015.3 8651.43 12470.5C8179.3 11816.8 7053.45 10276.9 6327.1 9347.2C5419.16 8185.03 6472.37 7930.81 7852.44 7277.08C9232.52 6623.36 8433.53 5424.88 7961.4 4117.44C7489.27 2809.99 7053.45 2882.63 6762.91 2918.95C6472.37 2955.27 6109.19 3500.03 5891.29 4117.44C5673.38 4734.84 3966.45 8620.84 3203.78 10218.8C2441.11 11816.8 1642.11 10473.1 552.583 9347.2C-536.948 8221.35 153.088 7930.81 1169.98 6623.36Z";
+$('#logoPath').setAttribute('d', LOGO_D);
+document.querySelectorAll('.lp').forEach(el => el.setAttribute('d', LOGO_D));
+
+const CUR = {
+  doux: { g: `<svg viewBox="0 0 12772 13057" width="62%" height="62%"><path d="${LOGO_D}" fill="#064343"/></svg>`, name: 'Doux coin', col: '#F8F3E9', val: 2, desc: 'Raises firepower. A hit costs one level' },
+  ngn:  { g: '₦', name: 'Naira',   col: '#9be3b4', val: 5,  desc: 'Fills your Doux charge' },
+  usd:  { g: '$', name: 'Dollar',  col: '#f6dc8c', val: 10,  desc: 'Rapid fire for 5s' },
+  eur:  { g: '€', name: 'Euro',    col: '#a8cbf5', val: 10,  desc: 'Shield for 4s' },
+  gbp:  { g: '£', name: 'Pound',   col: '#e8b4e6', val: 10,  desc: 'Double score for 6s' },
+  usdt: { g: '<svg viewBox="0 0 100 100" width="66%" height="66%"><path fill="#06201f" d="M24 22h52v14H57v42H43V36H24z"/><ellipse cx="50" cy="50" rx="30" ry="7" fill="none" stroke="#06201f" stroke-width="4"/></svg>', name: 'Tether',  col: '#8fd3bd', val: 8,  desc: 'Repairs one hull point' },
+  sol:  { g: '<svg viewBox="0 0 100 100" width="64%" height="64%"><path fill="#06201f" d="M32 24h46l-10 12H22zM22 44h46l10 12H32zM32 64h46l-10 12H22z"/></svg>', name: 'Solana',  col: '#b3a5f2', val: 10,  desc: 'Slows time for 3s' },
+  btc:  { g: '₿', name: 'Bitcoin', col: '#f7c59a', val: 100, desc: 'Jackpot from gold runners' },
+};
+const NOVA_MAX = 6;
+const TYPES = Object.keys(CUR);
+
+// Coins grouped by what they are, so the How to play page reads as three short lists instead of one long one.
+$('#paneCoins').innerHTML = [['Firepower', ['doux']], ['Currencies', ['ngn', 'usd', 'gbp', 'eur']], ['Crypto', ['usdt', 'sol', 'btc']]].map(([title, list]) =>
+  `<h3>${title}</h3><div class="legend">` + list.map(t => `<div><span class="g" style="background:${CUR[t].col}">${CUR[t].g}</span>${CUR[t].name}<small>${CUR[t].desc}</small></div>`).join('') + '</div>').join('');
+
+/* ---------- Renderer / scene ---------- */
+const canvas = $('#c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x021616);
+scene.fog = new THREE.Fog(0x021616, 28, 62);
+const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
+const CAM = new THREE.Vector3(0, -9, 16);
+const LOOK = new THREE.Vector3(0, 1.5, 0);
+let camScale = 1;
+
+function makeEnv() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 256);
+  grd.addColorStop(0, '#d8ecff'); grd.addColorStop(0.42, '#33467a'); grd.addColorStop(0.55, '#0b0f22'); grd.addColorStop(1, '#000');
+  g.fillStyle = grd; g.fillRect(0, 0, 512, 256);
+  [[110, 60, '#ffffff', 46], [380, 70, '#7fd4ff', 60], [250, 36, '#ffe1a6', 32], [470, 150, '#b88cff', 40]].forEach(([x, y, col, r]) => {
+    const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2);
+  });
+  const t = new THREE.CanvasTexture(c); t.mapping = THREE.EquirectangularReflectionMapping;
+  const pm = new THREE.PMREMGenerator(renderer);
+  const env = pm.fromEquirectangular(t).texture; t.dispose(); pm.dispose();
+  return env;
+}
+scene.environment = makeEnv();
+DouxAssets.init(renderer);
+
+scene.add(new THREE.AmbientLight(0x8090b0, 0.35));
+const key = new THREE.DirectionalLight(0xffffff, 1.1); key.position.set(5, -6, 10); scene.add(key);
+const rim = new THREE.DirectionalLight(0x5aa8ff, 1.4); rim.position.set(-6, 12, -4); scene.add(rim);
+const warm = new THREE.DirectionalLight(0xff9a5a, 0.5); warm.position.set(8, 6, 2); scene.add(warm);
+
+let composer = null, bloom = null;
+if (THREE.EffectComposer && THREE.UnrealBloomPass && THREE.RenderPass) {
+  try {
+    composer = new THREE.EffectComposer(renderer);
+    composer.addPass(new THREE.RenderPass(scene, camera));
+    bloom = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.85, 0.45, 0.86);
+    composer.addPass(bloom);
+  } catch (e) { composer = null; }
+}
+
+/* ---------- Helpers: textures ---------- */
+function glowTex(inner = 'rgba(255,255,255,1)') {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'); const rg = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  rg.addColorStop(0, inner); rg.addColorStop(0.35, 'rgba(255,255,255,.45)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+const GLOW = glowTex();
+
+/* ---------- Background: stars + nebula ---------- */
+const STAR_N = 1400;
+const starGeo = new THREE.BufferGeometry();
+const starPos = new Float32Array(STAR_N * 3), starSpd = new Float32Array(STAR_N);
+for (let i = 0; i < STAR_N; i++) {
+  starPos[i * 3] = rand(-45, 45); starPos[i * 3 + 1] = rand(-20, 45); starPos[i * 3 + 2] = rand(-35, -3);
+  starSpd[i] = 0.4 + (35 + starPos[i * 3 + 2]) / 35 * 2.2;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 0.16, map: GLOW, color: 0xF8F3E9, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+scene.add(stars);
+
+
+/* ---------- Particles ---------- */
+const PMAX = 3500;
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(PMAX * 3).fill(9999), pCol = new Float32Array(PMAX * 3), pBase = new Float32Array(PMAX * 3);
+const pVel = new Float32Array(PMAX * 3), pLife = new Float32Array(PMAX), pMax = new Float32Array(PMAX);
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 0.32, map: GLOW, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+particles.frustumCulled = false;
+scene.add(particles);
+let pIdx = 0;
+const tmpC = new THREE.Color();
+function emit(x, y, z, vx, vy, vz, col, life) {
+  const i = pIdx; pIdx = (pIdx + 1) % PMAX;
+  pPos[i * 3] = x; pPos[i * 3 + 1] = y; pPos[i * 3 + 2] = z;
+  pVel[i * 3] = vx; pVel[i * 3 + 1] = vy; pVel[i * 3 + 2] = vz;
+  tmpC.set(col); pBase[i * 3] = tmpC.r; pBase[i * 3 + 1] = tmpC.g; pBase[i * 3 + 2] = tmpC.b;
+  pLife[i] = pMax[i] = life;
+}
+function burst(x, y, col, n = 30, spd = 6, life = 0.8) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, s = spd * (0.3 + Math.random() * 0.9), e = rand(-1, 1);
+    emit(x, y, 0, Math.cos(a) * s, Math.sin(a) * s, e * s * 0.5, col, life * rand(0.5, 1.2));
+  }
+}
+function updateParticles(dt) {
+  const drag = Math.pow(0.15, dt);
+  for (let i = 0; i < PMAX; i++) {
+    if (pLife[i] <= 0) continue;
+    pLife[i] -= dt;
+    if (pLife[i] <= 0) { pPos[i * 3] = 9999; pCol[i * 3] = pCol[i * 3 + 1] = pCol[i * 3 + 2] = 0; continue; }
+    pVel[i * 3] *= drag; pVel[i * 3 + 1] *= drag; pVel[i * 3 + 2] *= drag;
+    pPos[i * 3] += pVel[i * 3] * dt; pPos[i * 3 + 1] += pVel[i * 3 + 1] * dt; pPos[i * 3 + 2] += pVel[i * 3 + 2] * dt;
+    const k = pLife[i] / pMax[i];
+    pCol[i * 3] = pBase[i * 3] * k; pCol[i * 3 + 1] = pBase[i * 3 + 1] * k; pCol[i * 3 + 2] = pBase[i * 3 + 2] * k;
+  }
+  pGeo.attributes.position.needsUpdate = true; pGeo.attributes.color.needsUpdate = true;
+}
+
+/* ---------- Ship (Doux logo, extruded) ---------- */
+function logoShape() {
+  const toks = LOGO_D.match(/[MCZ]|-?\d*\.?\d+/gi);
+  const s = new THREE.Shape(); let i = 0, cmd = '';
+  const n = () => parseFloat(toks[i++]);
+  while (i < toks.length) {
+    const t = toks[i];
+    if (/^[MCZ]$/i.test(t)) { cmd = t.toUpperCase(); i++; if (cmd === 'Z') continue; }
+    if (cmd === 'M') { const x = n(), y = n(); s.moveTo(x, -y); }
+    else if (cmd === 'C') { const a = [n(), n(), n(), n(), n(), n()]; s.bezierCurveTo(a[0], -a[1], a[2], -a[3], a[4], -a[5]); }
+    else i++;
+  }
+  return s;
+}
+const SHIP_H = 1.8;
+const ship = (() => {
+  const geo = new THREE.ExtrudeGeometry(logoShape(), { depth: 1100, bevelEnabled: true, bevelThickness: 380, bevelSize: 280, bevelSegments: 5, curveSegments: 30 });
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox, ctr = new THREE.Vector3(); bb.getCenter(ctr);
+  const k = SHIP_H / (bb.max.y - bb.min.y);
+  geo.translate(-ctr.x, -ctr.y, -ctr.z); geo.scale(k, k, k);
+  const pos = geo.attributes.position, col = new Float32Array(pos.count * 3);
+  const hh = SHIP_H / 2, W = new THREE.Color(0xF8F3E9), G = new THREE.Color(0x8fb5ab), c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const t = clamp((hh - pos.getY(i)) / SHIP_H, 0, 1);
+    if (t < 0.616) c.copy(W).lerp(G, t / 0.616); else c.copy(G).lerp(W, (t - 0.616) / 0.384);
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.8, roughness: 0.26, envMapIntensity: 1.3 });
+  const mesh = new THREE.Mesh(geo, mat);
+  const toLocal = (x, y) => new THREE.Vector3((x - ctr.x) * k, (-y - ctr.y) * k, 0);
+
+  const group = new THREE.Group();
+  const body = new THREE.Group(); body.add(mesh); group.add(body);
+  body.rotation.x = 0.32;
+
+  const engines = [toLocal(2350, 11050), toLocal(9700, 12500)];
+  const flames = engines.map(p => {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: 0x6fe8ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    sp.position.copy(p); sp.position.z = -0.1; sp.scale.set(0.7, 0.9, 1); body.add(sp); return sp;
+  });
+  const light = new THREE.PointLight(0x6fe8ff, 1.6, 5); light.position.set(0, -0.8, 0.6); group.add(light);
+
+  const shield = new THREE.Group();
+  shield.add(new THREE.Mesh(new THREE.SphereGeometry(1.15, 32, 16), new THREE.MeshBasicMaterial({ color: 0x4d7cff, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending })));
+  shield.add(new THREE.Mesh(new THREE.IcosahedronGeometry(1.2, 1), new THREE.MeshBasicMaterial({ color: 0x8fb0ff, wireframe: true, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending })));
+  shield.visible = false; group.add(shield);
+
+  const magnet = new THREE.Mesh(new THREE.RingGeometry(1.35, 1.45, 64), new THREE.MeshBasicMaterial({ color: 0x9be3b4, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+  magnet.visible = false; group.add(magnet);
+
+  scene.add(group);
+  return { group, body, flames, light, shield, magnet, engines, muzzle: toLocal(6400, 400), x: 0, y: 0, vx: 0, vy: 0 };
+})();
+
+/* ---------- Coins ---------- */
+// Coin models live in doux-assets.js so the game and the asset page always show the same thing.
+function makeCoinMesh(t) {
+  const grp = DouxAssets.makeCoin(t, 'silver');
+  grp.scale.setScalar(t === 'btc' ? 1.6 : 1.35);
+  grp.userData.spin = grp.userData.disc;
+  return grp;
+}
+
+/* ---------- Rocks ---------- */
+const rockGeos = [];
+for (let v = 0; v < 6; v++) {
+  const g = new THREE.IcosahedronGeometry(1, 1), p = g.attributes.position, sd = v * 1.7 + 0.3;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const f = 1 + 0.22 * Math.sin(x * 3.1 + sd) * Math.cos(y * 2.7 - sd) + 0.14 * Math.sin(z * 4.3 + x * 1.3 + sd * 2);
+    p.setXYZ(i, x * f, y * f * 0.92, z * f);
+  }
+  g.computeVertexNormals(); rockGeos.push(g);
+}
+const rockMat = new THREE.MeshStandardMaterial({ color: 0x6d625c, roughness: 0.92, metalness: 0.15, flatShading: true });
+const hotRockMat = new THREE.MeshStandardMaterial({ color: 0x5a3a33, roughness: 0.85, metalness: 0.1, flatShading: true, emissive: 0xff4a1a, emissiveIntensity: 0.35 });
+
+/* ---------- Crates ---------- */
+const barGeo = new THREE.PlaneGeometry(1.8, 0.14);
+
+/* ---------- Bullets ---------- */
+const bulletGeo = new THREE.CylinderGeometry(0.055, 0.055, 0.6, 6);
+const bulletMat = new THREE.MeshBasicMaterial({ color: 0xF8F3E9 });
+const bulletMatBoost = new THREE.MeshBasicMaterial({ color: 0xffe08a });
+
+/* ---------- Enemies ---------- */
+// Hunter drone: faceted body, glowing eye, centre barrel, engine pods and a scanning ring. The boss is the same design, larger and heavier.
+const DM = {
+  hull: new THREE.MeshStandardMaterial({ color: 0x4a5068, metalness: 0.75, roughness: 0.35, flatShading: true }),
+  trim: new THREE.MeshStandardMaterial({ color: 0x8a90a6, metalness: 1, roughness: 0.2 }),
+  lit: new THREE.MeshStandardMaterial({ color: 0x110000, emissive: 0xff2a4a, emissiveIntensity: 1.8 }),
+  bossHull: new THREE.MeshStandardMaterial({ color: 0x3a2030, metalness: 0.85, roughness: 0.3, flatShading: true }),
+  bossLit: new THREE.MeshStandardMaterial({ color: 0x110000, emissive: 0xffb48f, emissiveIntensity: 2 }),
+  halo: new THREE.SpriteMaterial({ map: GLOW, color: 0xff2a4a, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }),
+  bossHalo: new THREE.SpriteMaterial({ map: GLOW, color: 0xffb48f, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending }),
+};
+const DG = {
+  core: new THREE.OctahedronGeometry(0.5, 0), eye: new THREE.SphereGeometry(0.16, 20, 14), lid: new THREE.TorusGeometry(0.2, 0.04, 8, 24),
+  barrel: new THREE.CylinderGeometry(0.05, 0.07, 0.42, 10), muzzle: new THREE.SphereGeometry(0.06, 10, 8),
+  arm: new THREE.BoxGeometry(0.56, 0.12, 0.1), pod: new THREE.CylinderGeometry(0.12, 0.15, 0.6, 8), tip: new THREE.ConeGeometry(0.12, 0.42, 8),
+  strip: new THREE.BoxGeometry(0.045, 0.38, 0.045), fin: new THREE.ConeGeometry(0.07, 0.5, 4),
+  ring: new THREE.TorusGeometry(0.66, 0.022, 6, 48), node: new THREE.BoxGeometry(0.12, 0.05, 0.07),
+};
+function makeDroneModel(isBoss = false) {
+  const g = new THREE.Group(), hull = isBoss ? DM.bossHull : DM.hull, lit = isBoss ? DM.bossLit : DM.lit;
+  const add = (geo, mat, x, y, z, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.z = rz; g.add(m); return m; };
+  add(DG.core, hull, 0, 0, 0).scale.set(1, 1.25, 0.72);
+  add(DG.eye, lit, 0, -0.16, 0.27); add(DG.lid, DM.trim, 0, -0.16, 0.27).rotation.x = -0.45;
+  const halo = new THREE.Sprite(isBoss ? DM.bossHalo : DM.halo); halo.position.set(0, -0.16, 0.37); halo.scale.set(0.9, 0.9, 1); g.add(halo);
+  add(DG.barrel, DM.trim, 0, -0.78, 0); add(DG.muzzle, lit, 0, -1, 0);
+  (isBoss ? [-1.45, -0.8, 0.8, 1.45] : [-0.8, 0.8]).forEach(px => {
+    const s = Math.sign(px), py = Math.abs(px) > 1 ? -0.2 : 0;
+    add(DG.arm, hull, px - s * 0.3, py + 0.1, 0, s * 0.4);
+    add(DG.pod, hull, px, py, 0); add(DG.tip, DM.trim, px, py - 0.5, 0, Math.PI); add(DG.strip, lit, px, py, 0.14);
+  });
+  add(DG.fin, DM.trim, 0, 0.78, 0);
+  const makeRing = () => {
+    const ring = new THREE.Group(); ring.add(new THREE.Mesh(DG.ring, DM.trim));
+    for (let i = 0; i < 3; i++) { const a = i / 3 * Math.PI * 2, n = new THREE.Mesh(DG.node, lit); n.position.set(Math.cos(a) * 0.66, Math.sin(a) * 0.66, 0); n.rotation.z = a + Math.PI / 2; ring.add(n); }
+    g.add(ring); return ring;
+  };
+  const ring = makeRing(); ring.rotation.x = 1.15; g.userData.ring = ring;
+  if (isBoss) { ring.scale.setScalar(1.25); const r2 = makeRing(); r2.rotation.x = -0.9; r2.scale.setScalar(2.6); g.userData.ring2 = r2; }
+  return g;
+}
+const ebGeo = new THREE.SphereGeometry(0.17, 10, 8);
+const ebMat = new THREE.MeshBasicMaterial({ color: 0xff4466 });
+function part(g, geo, mat, x = 0, y = 0, z = 0, rz = 0, rx = 0) {
+  const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, 0, rz); g.add(m); return m;
+}
+function ringGroup(lit, n = 3) {
+  const r = new THREE.Group(); r.add(new THREE.Mesh(DG.ring, DM.trim));
+  for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; part(r, DG.node, lit, Math.cos(a) * 0.66, Math.sin(a) * 0.66, 0, a + Math.PI / 2); }
+  return r;
+}
+
+/* ---------- Gold runner: flies across the screen, nose along +x ---------- */
+const RG = { body: new THREE.ConeGeometry(0.3, 1.7, 6), tail: new THREE.CylinderGeometry(0.3, 0.2, 0.3, 6), wing: new THREE.BoxGeometry(0.75, 0.5, 0.05), edge: new THREE.BoxGeometry(0.7, 0.045, 0.07) };
+const goldMat = new THREE.MeshStandardMaterial({ color: 0xe0a83a, metalness: 0.9, roughness: 0.3, flatShading: true, emissive: 0x6a3a00, emissiveIntensity: 0.5 });
+const goldLit = new THREE.MeshStandardMaterial({ color: 0x1a0d00, emissive: 0xff9a1f, emissiveIntensity: 1.8 });
+function makeRunnerModel() {
+  const g = new THREE.Group();
+  part(g, RG.body, goldMat, 0, 0, 0, -Math.PI / 2).scale.set(1, 1, 0.6);
+  part(g, RG.tail, DM.hull, -0.98, 0, 0, -Math.PI / 2).scale.set(1, 1, 0.6);
+  [-1, 1].forEach(s => { part(g, RG.wing, goldMat, -0.45, s * 0.42, 0, s * 0.55); part(g, RG.edge, goldLit, -0.52, s * 0.68, 0, s * 0.55); });
+  const coin = makeCoinMesh('btc'); coin.scale.setScalar(0.55); coin.position.set(-0.3, 0, 0.36); g.add(coin);
+  g.userData.coin = coin.userData.spin;
+  return g;
+}
+
+/* ---------- Boss drones: one per level, each with its own shape, colour and attacks ---------- */
+const BG = {
+  eye: new THREE.SphereGeometry(0.3, 24, 16), lid: new THREE.TorusGeometry(0.36, 0.06, 8, 28),
+  hex: new THREE.CylinderGeometry(1.1, 1.1, 0.4, 6), cell: new THREE.CylinderGeometry(0.2, 0.2, 0.08, 6),
+  spike: new THREE.ConeGeometry(0.1, 0.7, 5), blade: new THREE.BoxGeometry(0.14, 1.9, 0.12),
+  dart: new THREE.ConeGeometry(0.42, 2.2, 4), cannon: new THREE.CylinderGeometry(0.1, 0.14, 1.0, 10), wing: new THREE.BoxGeometry(1.3, 0.5, 0.1),
+  orb: new THREE.IcosahedronGeometry(0.62, 1), sat: new THREE.SphereGeometry(0.16, 14, 10),
+  slab: new THREE.BoxGeometry(3.4, 0.55, 0.3), tower: new THREE.BoxGeometry(0.9, 1.5, 0.5), turret: new THREE.CylinderGeometry(0.28, 0.34, 0.5, 8),
+  arc: new THREE.TorusGeometry(1.15, 0.15, 8, 36, Math.PI), pod: new THREE.SphereGeometry(0.52, 18, 12), prism: new THREE.OctahedronGeometry(0.85, 0), disc: new THREE.CylinderGeometry(1.25, 1.25, 0.3, 28),
+};
+function bossEye(g, M, x, y, z, s) {
+  part(g, BG.eye, M.lit, x, y, z).scale.setScalar(s); part(g, BG.lid, DM.trim, x, y, z).scale.setScalar(s);
+  const h = new THREE.Sprite(M.halo); h.position.set(x, y, z + 0.2); h.scale.set(1.8 * s, 1.8 * s, 1); g.add(h);
+}
+const BOSSES = [
+  {
+    name: 'Warden', desc: 'An oversized hunter. Aimed fans, bullet rings and a few escorts.',
+    glow: 0xffb48f, hull: 0x3a2030, pool: ['fan', 'minis', 'ring'], swarm: 0,
+    mats: { hull: DM.bossHull, lit: DM.bossLit, halo: DM.bossHalo },
+    build(g, M, spin) {
+      const m = makeDroneModel(true); g.add(m);
+      spin.push({ o: m.userData.ring, a: 'z', v: 2.5 }, { o: m.userData.ring2, a: 'z', v: -1.8 });
+    },
+  },
+  {
+    name: 'Hive', desc: 'A carrier. It keeps spilling swarms of little drones out of its cells.',
+    glow: 0xe6f59a, hull: 0x3a4020, pool: ['minis', 'fan', 'minis', 'ring'], swarm: 2,
+    build(g, M, spin) {
+      part(g, BG.hex, M.hull, 0, 0, 0, 0, Math.PI / 2);
+      for (let k = 0; k < 6; k++) {
+        const a = k / 6 * Math.PI * 2 + 0.52;
+        part(g, BG.cell, M.lit, Math.cos(a) * 0.68, Math.sin(a) * 0.68, 0.22, 0, Math.PI / 2);
+        part(g, BG.spike, DM.trim, Math.cos(a) * 1.3, Math.sin(a) * 1.3, 0, a - Math.PI / 2);
+      }
+      bossEye(g, M, 0, 0, 0.26, 0.8);
+      const r = ringGroup(M.lit, 6); r.scale.setScalar(2.3); r.rotation.x = 0.35; g.add(r); spin.push({ o: r, a: 'z', v: 1.2 });
+    },
+  },
+  {
+    name: 'Lancer', desc: 'A sniper. It locks on, then fires a fast stream straight down the line.',
+    glow: 0x9ad8f5, hull: 0x1f3a4c, pool: ['stream', 'fan', 'stream', 'minis'], swarm: 0,
+    build(g, M, spin) {
+      part(g, BG.dart, M.hull, 0, 0, 0, Math.PI).scale.set(1, 1, 0.6);
+      [-1, 1].forEach(s => {
+        part(g, BG.blade, DM.trim, s * 0.6, -0.35, 0); part(g, DG.strip, M.lit, s * 0.6, -0.35, 0.09).scale.y = 4;
+        part(g, BG.wing, M.hull, s * 0.85, 0.75, 0, s * 0.6); part(g, BG.spike, DM.trim, s * 0.35, 1.35, 0);
+      });
+      part(g, BG.cannon, DM.trim, 0, -1.35, 0); part(g, DG.muzzle, M.lit, 0, -1.9, 0).scale.setScalar(2);
+      bossEye(g, M, 0, 0.25, 0.24, 0.6);
+      const r = ringGroup(M.lit, 2); r.scale.setScalar(0.5); r.position.y = -1.3; r.rotation.x = Math.PI / 2; g.add(r); spin.push({ o: r, a: 'z', v: 6 });
+    },
+  },
+  {
+    name: 'Orbiter', desc: 'A gyroscope. It fills the screen with spirals and rings to weave through.',
+    glow: 0xf5a6dc, hull: 0x40244a, pool: ['spiral', 'ring', 'spiral', 'minis'], swarm: 0,
+    build(g, M, spin) {
+      part(g, BG.orb, M.hull); bossEye(g, M, 0, -0.1, 0.55, 0.8);
+      [[1.2, 0, 1.6, 1.5], [-0.7, 0.8, 1.9, -1.1], [0.3, 1.3, 2.2, 0.8]].forEach(([rx, ry, sc, v]) => {
+        const r = ringGroup(M.lit, 2); r.scale.setScalar(sc); r.rotation.x = rx; r.rotation.y = ry; g.add(r); spin.push({ o: r, a: 'z', v });
+      });
+      const sats = new THREE.Group();
+      for (let k = 0; k < 4; k++) part(sats, BG.sat, M.lit, Math.cos(k * Math.PI / 2) * 1.55, Math.sin(k * Math.PI / 2) * 1.55, 0);
+      g.add(sats); spin.push({ o: sats, a: 'z', v: -1.6 });
+    },
+  },
+  {
+    name: 'Titan', desc: 'A fortress with a turret on each wing. It uses every attack in the book.',
+    glow: 0xff9a9a, hull: 0x4a2622, pool: ['cross', 'ring', 'minis', 'spiral', 'stream'], swarm: 1,
+    build(g, M, spin) {
+      part(g, BG.slab, M.hull, 0, 0.25, 0); part(g, BG.tower, M.hull, 0, 0, 0.05);
+      part(g, BG.blade, M.lit, 0, 0.25, 0.17, Math.PI / 2).scale.set(0.4, 1.7, 0.4);
+      bossEye(g, M, 0, -0.25, 0.34, 0.75);
+      [-1, 1].forEach(s => {
+        part(g, BG.turret, M.hull, s * 1.35, -0.15, 0.05); part(g, BG.cannon, DM.trim, s * 1.35, -0.75, 0.05).scale.set(1, 0.7, 1);
+        part(g, DG.muzzle, M.lit, s * 1.35, -1.1, 0.05).scale.setScalar(1.8);
+      });
+      for (let k = -2; k <= 2; k++) part(g, BG.spike, DM.trim, k * 0.32, 0.95 + (2 - Math.abs(k)) * 0.12, 0);
+      const r = ringGroup(M.lit, 4); r.scale.setScalar(2.5); r.rotation.x = 1.3; g.add(r); spin.push({ o: r, a: 'z', v: 1.4 });
+    },
+  },
+  {
+    name: 'Reaper', desc: 'A crescent that sweeps a curtain of shots from one side to the other.',
+    glow: 0xc3a0f5, hull: 0x2e2244, pool: ['sweep', 'fan', 'sweep', 'ring'], swarm: 0,
+    build(g, M, spin) {
+      part(g, BG.arc, M.hull, 0, -0.1, 0);
+      [-1, 1].forEach(s => { part(g, BG.spike, DM.trim, s * 1.15, -0.5, 0, Math.PI).scale.setScalar(1.5); part(g, DG.strip, M.lit, s * 0.82, 0.72, 0.16, s * 0.8).scale.y = 2.4; });
+      part(g, BG.orb, M.hull, 0, 0.1, 0).scale.setScalar(0.72); bossEye(g, M, 0, 0, 0.42, 0.7);
+      part(g, BG.cannon, DM.trim, 0, -0.75, 0).scale.set(1, 0.6, 1);
+      const r = ringGroup(M.lit, 3); r.scale.setScalar(1.15); r.rotation.x = 1.2; g.add(r); spin.push({ o: r, a: 'z', v: 2.4 });
+    },
+  },
+  {
+    name: 'Twins', desc: 'Two linked pods that rain shots down the whole lane.',
+    glow: 0x9af5cc, hull: 0x1f4034, pool: ['rain', 'cross', 'minis', 'rain'], swarm: 1,
+    build(g, M, spin) {
+      part(g, BG.blade, DM.trim, 0, 0, 0, Math.PI / 2).scale.set(1.4, 0.75, 1);
+      [-1, 1].forEach(s => {
+        part(g, BG.pod, M.hull, s * 0.95, 0, 0); bossEye(g, M, s * 0.95, -0.05, 0.46, 0.55);
+        part(g, BG.cannon, DM.trim, s * 0.95, -0.8, 0).scale.set(1, 0.6, 1); part(g, BG.spike, DM.trim, s * 0.95, 0.75, 0);
+        const r = ringGroup(M.lit, 2); r.position.x = s * 0.95; r.rotation.x = 1.1; g.add(r); spin.push({ o: r, a: 'z', v: s * 2.6 });
+      });
+      part(g, BG.cell, M.lit, 0, 0, 0.1, 0, Math.PI / 2).scale.setScalar(1.3);
+    },
+  },
+  {
+    name: 'Mirage', desc: 'It blinks from place to place and fires the moment it lands.',
+    glow: 0xdfe8ff, hull: 0x2a3446, pool: ['blink', 'stream', 'blink', 'spiral'], swarm: 0,
+    build(g, M, spin) {
+      part(g, BG.prism, M.hull).scale.set(1, 1.35, 0.5); bossEye(g, M, 0, 0, 0.3, 0.7);
+      [-1, 1].forEach(s => { part(g, BG.wing, M.hull, s * 0.95, 0.1, -0.05, s * -0.5).scale.set(0.8, 0.5, 1); part(g, DG.strip, M.lit, s * 0.5, 0, 0.2, s * 0.55).scale.y = 3; });
+      [[1.25, 1.9, 1.8], [-1.0, 2.3, -1.3]].forEach(([rx, sc, v]) => { const r = ringGroup(M.lit, 3); r.scale.setScalar(sc); r.rotation.x = rx; g.add(r); spin.push({ o: r, a: 'z', v }); });
+      const sats = new THREE.Group();
+      for (let k = 0; k < 3; k++) part(sats, BG.sat, M.lit, Math.cos(k * 2.094) * 1.3, Math.sin(k * 2.094) * 1.3, 0);
+      g.add(sats); spin.push({ o: sats, a: 'z', v: 2.2 });
+    },
+  },
+  {
+    name: 'Dreadnought', desc: 'A heavy disc ringed with turrets.',
+    glow: 0xf5eaa0, hull: 0x34343e, pool: ['cross', 'rain', 'sweep', 'minis', 'stream'], swarm: 2,
+    build(g, M, spin) {
+      part(g, BG.disc, M.hull, 0, 0, 0, 0, Math.PI / 2); part(g, BG.tower, M.hull, 0, 0, 0.12).scale.set(0.8, 0.7, 1);
+      bossEye(g, M, 0, 0, 0.42, 0.8);
+      [-1.05, -0.4, 0.4, 1.05].forEach(x => {
+        const y = -0.95 + Math.abs(x) * 0.35;
+        part(g, BG.turret, M.hull, x, y, 0.1).scale.setScalar(0.7); part(g, BG.cannon, DM.trim, x, y - 0.45, 0.1).scale.set(0.8, 0.5, 0.8); part(g, DG.muzzle, M.lit, x, y - 0.72, 0.1).scale.setScalar(1.5);
+      });
+      for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; part(g, BG.cell, M.lit, Math.cos(a) * 0.95, Math.sin(a) * 0.95, 0.17, 0, Math.PI / 2).scale.setScalar(0.6); }
+      for (let k = -2; k <= 2; k++) part(g, BG.spike, DM.trim, k * 0.4, 1.35 - Math.abs(k) * 0.14, 0);
+      const r = ringGroup(M.lit, 6); r.scale.setScalar(2.5); r.rotation.x = 1.25; g.add(r); spin.push({ o: r, a: 'z', v: -1.2 });
+    },
+  },
+];
+function makeBossModel(i) {
+  const def = BOSSES[i];
+  if (!def.mats) def.mats = {
+    hull: new THREE.MeshStandardMaterial({ color: def.hull, metalness: 0.85, roughness: 0.3, flatShading: true }),
+    lit: new THREE.MeshStandardMaterial({ color: 0x110000, emissive: def.glow, emissiveIntensity: 2 }),
+    halo: new THREE.SpriteMaterial({ map: GLOW, color: def.glow, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending }),
+  };
+  const g = new THREE.Group(), spin = [];
+  def.build(g, def.mats, spin);
+  g.userData.spin = spin; g.userData.lit = def.mats.lit;
+  return g;
+}
+
+/* ---------- Game state ---------- */
+const B = { minY: -6, maxY: 4, foeY: 4, halfW: 8, top: 18, bottom: -10 };
+let state = 'menu';
+let coins = [], rocks = [], crates = [], bullets = [], rings = [], drones = [], ebullets = [];
+let score = 0, best = 0, hp = 3, level = 1, levelT = 0, vaultSpawned = false;
+let wallet = {}, naira = 0, combo = 0, comboT = 0, maxMult = 1;
+const fx = { boost: 0, shield: 0, dbl: 0, slow: 0, magnet: 0 };
+const FXMAX = { boost: 5, shield: 4, dbl: 6, slow: 3, magnet: 3 };
+// Firepower climbs with Doux coins and drops one level each time the hull is hit.
+const POWER_MAX = 5;
+let power = 1, powerXp = 0, phase = 'wave', bossT = 0;
+// One boss per level for levels 1 to 9. Level 10 is the final: every boss again, two on screen at a time.
+const LAST_LEVEL = 10, FINAL_HP = 260;
+let bosses = [], finalQueue = [], maxHp = 3, won = false;
+const bossesLeft = () => bosses.length + finalQueue.length;
+const powerNeed = () => 2 + power;
+let opening = [];   // scripted [time, action] beats for the first seconds of a run
+let coinT = 5;
+// Free coins drifting down the lane, on top of what enemies drop. Kept to one or a short trail so the screen stays readable.
+function floatCoins() {
+  const type = pickWeighted({ ngn: 35, doux: 25, usd: 9, gbp: 8, sol: 7, eur: 6, usdt: 4 });
+  const x = rand(-B.halfW * 0.85, B.halfW * 0.85), n = (type === 'ngn' || type === 'doux') && Math.random() < 0.4 ? 3 : 1;
+  for (let i = 0; i < n; i++) spawnCoin(type, x, B.top + i * 1.5);
+}
+let invuln = 0, fireT = 0, rockT = 0, crateT = 6, droneT = 4, runnerT = 14, shake = 0, deadT = 0;
+let autoFire = true, holdFire = false, muted = false;
+// Saved on this device only. Private browsing may refuse storage, in which case the defaults simply apply each visit.
+function load(key, fallback) { try { return Object.assign({}, fallback, JSON.parse(localStorage.getItem(key) || '{}')); } catch (e) { return fallback; } }
+function save(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage unavailable: keep playing without saving */ } }
+const SET = load('coinrun_settings', { sound: true, auto: true, haptics: true });
+const META = load('coinrun_meta', { last: '', streak: 0, seen: false });
+muted = !SET.sound; autoFire = SET.auto;
+const buzz = ms => { if (SET.haptics && navigator.vibrate) navigator.vibrate(ms); };
+const dayKey = d => d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+// One play per calendar day keeps the streak; a missed day starts it again.
+function touchStreak() {
+  const now = new Date(), today = dayKey(now), yesterday = dayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+  if (META.last === today) return;
+  META.streak = META.last === yesterday ? META.streak + 1 : 1; META.last = today; save('coinrun_meta', META);
+}
+let runT = 0, bossKills = 0;
+// Ghost: a moment during which nothing can hit you, then a cooldown.
+const DASH_CD = 4;
+let dashT = 0, dashCd = 0;
+function dash() {
+  if (state !== 'play' || dashCd > 0) return;
+  dashT = 1.2; dashCd = DASH_CD; invuln = Math.max(invuln, 1.5);
+  toast('GHOST', '#F8F3E9');
+  burst(ship.x, ship.y, '#F8F3E9', 40, 9, 0.5); addRing(ship.x, ship.y, 0xf8f3e9, 5, 0.45);
+  tone(300, 1200, 0.14, 'sine', 0.06); buzz(15);
+}
+let practice = false;   // set when a run is started partway through for testing; such runs never reach the scores
+const LEVEL_LEN = 30, VAULT_AT = 22;
+// The leaderboard was reset on 2026-11-10: names and bests saved before then are dropped, so every player starts fresh.
+try { ['coinrun_name', 'coinrun_best_v3', 'coinrun_scores_v3'].forEach(k => localStorage.removeItem(k)); } catch (e) { /* storage unavailable */ }
+try { best = +localStorage.getItem('coinrun_best_v4') || 0; } catch (e) {}
+
+// How hard the game plays. It matches the level up to 5, then climbs two steps per level: level 6 plays like 7, level 10 like 15.
+const diff = () => level <= 5 ? level : 5 + (level - 5) * 2;
+const speedMul = () => 1 + 0.16 * (diff() - 1);
+const mult = () => Math.min(4, 1 + Math.floor(combo / 12));
+function bump() { combo++; comboT = 3.2; maxMult = Math.max(maxMult, mult()); }
+
+/* ---------- Audio ---------- */
+let AC = null;
+function initAudio() { if (AC) { AC.resume && AC.resume(); return; } try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+function tone(f1, f2, dur, type = 'sine', vol = 0.06, delay = 0) {
+  if (!AC || muted) return;
+  const t = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f1, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur + 0.03);
+}
+function boom(dur = 0.4, vol = 0.2) {
+  if (!AC || muted) return;
+  const len = Math.floor(AC.sampleRate * dur), buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+  const src = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+  src.buffer = buf; f.type = 'lowpass'; f.frequency.value = 900; g.gain.value = vol;
+  src.connect(f); f.connect(g); g.connect(AC.destination); src.start();
+}
+
+/* ---------- UI helpers ---------- */
+const toastEl = $('#toast'), flashEl = $('#flash');
+function toast(text, col = '#fff', small = '') {
+  toastEl.innerHTML = text + (small ? `<small>${small}</small>` : '');
+  toastEl.style.color = col; toastEl.classList.remove('show'); void toastEl.offsetWidth; toastEl.classList.add('show');
+}
+function flash(col, ms = 350) {
+  flashEl.style.transition = 'none'; flashEl.style.background = `radial-gradient(circle at 50% 60%, ${col}, transparent 70%)`; flashEl.style.opacity = 1;
+  requestAnimationFrame(() => { flashEl.style.transition = `opacity ${ms}ms ease-out`; flashEl.style.opacity = 0; });
+}
+const projV = new THREE.Vector3();
+let popCount = 0;
+function popup(text, x, y, col) {
+  if (popCount > 14) return;
+  projV.set(x, y, 0).project(camera);
+  const el = document.createElement('div'); el.className = 'pop'; el.textContent = text; el.style.color = col;
+  el.style.left = ((projV.x + 1) / 2 * innerWidth) + 'px'; el.style.top = ((1 - projV.y) / 2 * innerHeight) + 'px';
+  document.body.appendChild(el); popCount++;
+  setTimeout(() => { el.remove(); popCount--; }, 900);
+}
+const hullSvg = on => `<svg viewBox="0 0 12772 13057"><path d="${LOGO_D}" fill="${on ? '#F8F3E9' : 'rgba(248,243,233,.18)'}"/></svg>`;
+const FX_LABEL = { boost: ['Rapid fire', CUR.usd.col], shield: ['Shield', CUR.eur.col], dbl: ['Double score', CUR.gbp.col], slow: ['Slow time', CUR.sol.col], magnet: ['Magnet', CUR.ngn.col] };
+const chipHtml = (glyph, col) => `<span class="g" style="background:${col}">${glyph}</span>`;
+let hudT = 0;
+function renderHUD() {
+  $('#score').textContent = score.toLocaleString();
+  $('#mult').innerHTML = combo > 0 ? `×${mult()} combo<i><b style="width:${clamp(comboT / 3.2, 0, 1) * 100}%"></b></i>` : '';
+  const ready = naira >= NOVA_MAX;
+  $('#bNova').classList.toggle('ready', ready);
+  $('#douxRing').setAttribute('stroke-dashoffset', (213.6 * (1 - naira / NOVA_MAX)).toFixed(1));
+  $('#douxLbl').textContent = ready ? 'ready' : 'charge';
+  $('#bDash').classList.toggle('ready', dashCd <= 0);
+  $('#bDash').textContent = dashCd > 0 ? Math.ceil(dashCd) : 'Ghost';
+  const b0 = bosses[0], duo = b0 && b0.duo;
+  $('#lvlLbl').textContent = duo ? 'Final boss · ' + bossesLeft() + ' left' : b0 ? b0.name : 'Level ' + level;
+  const bossFrac = duo ? (bosses.reduce((n, b) => n + Math.max(0, b.hp), 0) + finalQueue.length * FINAL_HP) / (BOSSES.length * FINAL_HP) : b0 ? Math.max(0, b0.hp / b0.max) : 0;
+  $('#lvlbar').style.width = (b0 ? bossFrac : phase === 'wave' ? levelT / LEVEL_LEN : 1) * 100 + '%';
+  $('#lvlbar').style.background = b0 ? '#ff5a3a' : '#F8F3E9';
+  $('#pw').textContent = power >= POWER_MAX ? 'Firepower max' : 'Firepower';
+  // one pip per firepower level; the next one fills as Doux coins come in
+  $('#pips').innerHTML = [1, 2, 3, 4, 5].map(i => `<i><b style="width:${i <= power ? 100 : i === power + 1 ? powerXp / powerNeed() * 100 : 0}%"></b></i>`).join('');
+  $('#hull').innerHTML = Array.from({ length: maxHp }, (_, i) => hullSvg(i < hp)).join('');
+  $('#fx').innerHTML = Object.keys(fx).filter(k => fx[k] > 0).map(k =>
+    `<div class="chip" role="img" aria-label="${FX_LABEL[k][0]}"><i style="width:${fx[k] / FXMAX[k] * 100}%;background:${FX_LABEL[k][1]}"></i></div>`).join('');
+}
+
+/* ---------- Bounds ---------- */
+const ray = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), v2 = new THREE.Vector2(), hitV = new THREE.Vector3();
+function planeAt(nx, ny) { v2.set(nx, ny); ray.setFromCamera(v2, camera); const r = ray.ray.intersectPlane(plane, hitV); return r ? hitV.clone() : new THREE.Vector3(0, 30, 0); }
+function placeCamera(ox = 0, oy = 0) {
+  camera.position.set(CAM.x * camScale + ox, CAM.y * camScale + oy, CAM.z * camScale);
+  camera.lookAt(LOOK.x + ox * 0.5, LOOK.y, LOOK.z);
+}
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camScale = camera.aspect < 0.8 ? 1.45 : camera.aspect < 1.2 ? 1.15 : 1;
+  camera.updateProjectionMatrix();
+  placeCamera(); camera.updateMatrixWorld();
+  if (composer) { composer.setSize(w, h); }
+  B.minY = planeAt(0, -0.82).y; B.foeY = planeAt(0, 0.35).y; B.maxY = planeAt(0, 0.68).y;   // foeY: enemies hover above this line; the ship may cross it
+  B.top = planeAt(0, 1).y + 1.5; B.bottom = planeAt(0, -1).y - 2.5;
+  B.halfW = Math.min(Math.abs(planeAt(0.9, -0.3).x), 13);
+}
+addEventListener('resize', resize);
+resize();
+
+/* ---------- Spawning ---------- */
+function spawnCoin(type, x, y, vx = 0, vy = null) {
+  const g = makeCoinMesh(type); g.position.set(x, y, 0); scene.add(g);
+  coins.push({ type, g, x, y, vx, vy: vy === null ? -3.4 * speedMul() : vy, free: vy !== null, r: type === 'btc' ? 0.67 : 0.57, spin: rand(2.5, 4), ph: Math.random() * 6 });
+}
+function pickWeighted(w) { let s = 0; for (const k in w) s += w[k]; let r = Math.random() * s; for (const k in w) { r -= w[k]; if (r <= 0) return k; } return Object.keys(w)[0]; }
+function spawnRock(x = rand(-B.halfW, B.halfW), y = B.top, r = rand(0.45, 1.15) * (Math.random() < 0.2 ? 1.4 : 1), vx = rand(-0.8, 0.8)) {
+  const hot = level >= 3 && Math.random() < 0.25;
+  const m = new THREE.Mesh(rockGeos[Math.random() * 6 | 0], hot ? hotRockMat : rockMat);
+  m.scale.setScalar(r);
+  m.position.set(x, y, 0); scene.add(m);
+  const rock = { g: m, x, y, vx, vy: -rand(4, 6.2) * speedMul() * (hot ? 1.3 : 1), r, hp: Math.ceil(r * 3) + 1, rs: new THREE.Vector3(rand(-2, 2), rand(-2, 2), rand(-1, 1)) };
+  rocks.push(rock); return rock;
+}
+// `from` is set when a boss spills a mini drone out of itself.
+// `heavy` is a slow armoured drone that fires three-shot fans.
+function spawnDrone(runner = false, from = null, heavy = false) {
+  let m;
+  if (runner) { m = makeRunnerModel(); m.scale.setScalar(0.8); }
+  else if (heavy) { m = makeDroneModel(true); m.scale.setScalar(0.5); }
+  else { m = makeDroneModel(); m.scale.setScalar(from ? 0.45 : 0.75); }
+  const dir = Math.random() < 0.5 ? -1 : 1, mini = !!from;
+  const x = runner ? -dir * (B.halfW + 2) : mini ? from.x : rand(-B.halfW * 0.8, B.halfW * 0.8);
+  const y = runner ? rand(B.foeY + 1, B.top - 3) : mini ? from.y : B.top;
+  m.position.set(x, y, 0); scene.add(m);
+  drones.push({
+    g: m, runner, mini, heavy, x, y, dir, vx: mini ? rand(-7, 7) : 0, r: runner ? 0.8 : heavy ? 0.95 : mini ? 0.5 : 0.75,
+    hy: mini ? rand(B.foeY + 1, B.top - 5) : rand(B.foeY + 0.5, B.top - 2.5),
+    hp: runner ? 5 + level : heavy ? 7 + diff() * 2 : mini ? 1 + (level > 3 ? 1 : 0) : 2 + Math.ceil(diff() / 2),
+    t: 0, shotT: rand(1, 1.8), ph: rand(0, 6), life: mini ? rand(2.5, 4.5) : heavy ? rand(11, 14) : rand(8, 11),
+  });
+  if (runner) { toast('GOLD RUNNER', CUR.btc.col, 'CATCH IT FOR BITCOIN'); tone(900, 1400, 0.2, 'triangle', 0.05); }
+}
+// slot 0 is a lone boss using the whole lane; -1 and 1 are the two halves used in the final.
+function spawnBoss(idx = (level - 1) % BOSSES.length, slot = 0) {
+  const def = BOSSES[idx], duo = slot !== 0;
+  const s = clamp(B.halfW / 3.2, 1.3, 2.2) * (duo ? 0.62 : 1), g = makeBossModel(idx);
+  const cx = slot * B.halfW * 0.5, max = duo ? FINAL_HP : 70 + 40 * diff();
+  g.scale.setScalar(s); g.position.set(cx, B.top + 3, 0); scene.add(g);
+  bosses.push({
+    g, def, name: def.name, duo, slot, cx, x: cx, y: B.top + 3, ph: slot > 0 ? 2 : 0,
+    hy: B.foeY + (B.top - 1.5 - B.foeY) * 0.3 + (slot > 0 ? 1.3 : 0), r: s * 0.9,
+    amp: duo ? Math.max(0, B.halfW * 0.5 - s) : Math.max(0, B.halfW - s * 1.5),
+    hp: max, max, t: 0, atk: null, atkT: duo ? 1.5 + (slot > 0 ? 1.2 : 0) : 2, step: 0, n: 0, hitT: 0, rage: false, arrived: false, vx: 0, vy: 0, tx: cx, ty: 0, wait: 0, spd: 3, dash: 0,
+  });
+  if (!duo) toast(def.name.toUpperCase(), '#' + def.glow.toString(16).padStart(6, '0'), 'DESTROY IT');
+  tone(110, 55, 0.8, 'sawtooth', 0.08);
+}
+// Where a boss heads next: usually a random spot in its part of the sky, sometimes straight over the player.
+function pickBossTarget(b) {
+  const lo = b.cx - b.amp, hi = b.cx + b.amp;
+  b.tx = Math.random() < 0.35 ? clamp(ship.x, lo, hi) : rand(lo, hi);
+  b.ty = clamp(rand(b.hy - 0.8, b.hy + 1.3), B.foeY + b.r * 0.6, B.top - b.r);
+  b.spd = rand(2.2, 5.2); b.wait = Math.random() < 0.4 ? rand(0.2, 0.8) : 0;
+}
+function bossAttack(b, edt) {
+  b.atkT -= edt;
+  if (b.atkT > 0) return;
+  if (!b.atk) {
+    const pool = b.def.pool;
+    b.atk = pool[b.n++ % pool.length]; b.step = 0;
+  }
+  // two bosses at once fire slower and rest longer, or the screen would be unreadable
+  const lv = b.duo ? 10 : diff(), spd = 5 + lv * 0.4 + (b.rage ? 1 : 0), my = b.y - b.r * 0.9;
+  const rest = () => { b.atk = null; b.atkT = (b.rage ? 0.9 : 1.6) * (b.duo ? 1.25 : 1); };
+  if (b.atk === 'fan') {
+    const a = Math.atan2(ship.y - my, ship.x - b.x);
+    [-0.28, 0, 0.28].forEach(o => enemyShot(b.x, my, a + o, spd + 1.5));
+    tone(420, 160, 0.1, 'square', 0.03);
+    b.atkT = 0.7; if (++b.step >= 4) rest();
+  } else if (b.atk === 'ring') {
+    const n = b.duo ? 13 : 10 + lv * 2, o = rand(0, 6.28);
+    for (let k = 0; k < n; k++) enemyShot(b.x, b.y, o + k / n * 6.28, spd);
+    tone(300, 90, 0.2, 'sawtooth', 0.04);
+    b.atkT = 1.1; if (++b.step >= (b.rage ? 3 : 2)) rest();
+  } else if (b.atk === 'minis') {
+    const n = b.duo ? 3 : 2 + Math.min(lv, 3) + b.def.swarm;
+    for (let k = 0; k < n; k++) spawnDrone(false, b);
+    burst(b.x, b.y, '#ff7a4a', 30, 7, 0.6); tone(200, 700, 0.25, 'triangle', 0.05);
+    rest();
+  } else if (b.atk === 'stream') {
+    // lock the angle first so the player gets half a second to step off the line
+    if (b.step === 0) { b.aim = Math.atan2(ship.y - my, ship.x - b.x); b.hitT = 0.4; b.step = 1; b.atkT = 0.5; tone(900, 1500, 0.4, 'sine', 0.05); }
+    else { enemyShot(b.x, my, b.aim, spd + 5); tone(700, 300, 0.05, 'square', 0.02); b.atkT = 0.07; if (++b.step > 10) rest(); }
+  } else if (b.atk === 'cross') {
+    [-1, 1].forEach(s => {
+      const tx = b.x + s * b.r * 1.35, a = Math.atan2(ship.y - my, ship.x - tx);
+      [-0.2, 0, 0.2].forEach(o => enemyShot(tx, my, a + o, spd + 1));
+    });
+    tone(380, 140, 0.12, 'square', 0.03);
+    b.atkT = 0.9; if (++b.step >= 3) rest();
+  } else if (b.atk === 'sweep') {
+    // a curtain of shots that swings across; move with it or slip behind it
+    if (b.step === 0) b.swing = Math.random() < 0.5 ? -1 : 1;
+    enemyShot(b.x, my, -Math.PI / 2 + (b.step - 9) * 0.13 * b.swing, spd);
+    if (b.step % 3 === 0) tone(480, 240, 0.05, 'square', 0.02);
+    b.atkT = 0.07; if (++b.step > 18) rest();
+  } else if (b.atk === 'rain') {
+    enemyShot(rand(-B.halfW, B.halfW), B.top, -Math.PI / 2, spd * 0.8);
+    b.atkT = 0.16; if (++b.step >= (b.duo ? 10 : 16)) rest();
+  } else if (b.atk === 'blink') {
+    if (b.step % 2 === 0) {
+      burst(b.x, b.y, '#dfe8ff', 26, 7, 0.5); pickBossTarget(b); b.dash = 0.45; b.hitT = 0.3; b.atkT = 0.5;
+      tone(1200, 400, 0.15, 'sine', 0.05);
+    } else {
+      const a = Math.atan2(ship.y - b.y, ship.x - b.x);
+      for (let k = 0; k < 7; k++) enemyShot(b.x, b.y, a + (k - 3) * 0.3, spd + 1);
+      b.atkT = 0.6;
+    }
+    if (++b.step >= 4) rest();
+  } else {
+    enemyShot(b.x, b.y, b.step * 0.45, spd); enemyShot(b.x, b.y, b.step * 0.45 + Math.PI, spd);
+    b.atkT = 0.09; if (++b.step >= 28) rest();
+  }
+}
+function damageBoss(n, b) {
+  if (!bosses.includes(b)) return;
+  b.hp -= n; b.hitT = 0.08; comboT = Math.max(comboT, 3.2);
+  if (!b.rage && b.hp < b.max * 0.4) { b.rage = true; if (!b.duo) toast('ENRAGED', '#ff5a3a'); tone(160, 320, 0.4, 'sawtooth', 0.07); }
+  if (b.hp <= 0) killBoss(b);
+}
+function killBoss(b) {
+  bosses.splice(bosses.indexOf(b), 1); bossKills++; buzz(140);
+  for (let k = 0; k < 4; k++) burst(b.x + rand(-1, 1), b.y + rand(-1, 1), k % 2 ? '#ffffff' : '#ff7a4a', 70, 13, 1.3);
+  addRing(b.x, b.y, 0xff7a4a, 16, 1); addRing(b.x, b.y, 0xffffff, 10, 0.7);
+  flash('rgba(255,122,74,.5)', 700); shake = 1.2; boom(1, 0.4);
+  ebullets.forEach(e => scene.remove(e.m)); ebullets = [];
+  for (let i = drones.length - 1; i >= 0; i--) if (drones[i].mini) killDrone(i);
+  scene.remove(b.g);
+  const drop = loot => loot.forEach((type, k) => { const a = k / loot.length * 6.28, s = rand(3, 7); spawnCoin(type, b.x, b.y, Math.cos(a) * s, Math.sin(a) * s); });
+  if (b.duo) {
+    drop(['doux', 'doux', 'ngn', 'ngn']);
+    bump(); addScore(400, b.x, b.y, '#ff7a4a', 'BOSS');
+    if (finalQueue.length) spawnBoss(finalQueue.shift(), b.slot);
+    if (bossesLeft()) { toast(bossesLeft() + ' TO GO', '#F8F3E9'); return; }
+    // the last one is down: the game is won
+    won = true; phase = 'won'; bossT = 3.2; invuln = 99;
+    score += 1000 + hp * 250;
+    toast('CONGRATULATIONS', '#F8F3E9', 'YOU BEAT COIN RUN');
+    [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, f, 0.3, 'triangle', 0.07, i * 0.12));
+    return;
+  }
+  drop(['btc', 'doux', 'doux', 'doux', 'doux', 'doux', 'doux', 'ngn', 'ngn', 'usd', 'sol', 'gbp']);
+  bump(); addScore(300 * level, b.x, b.y, '#ff7a4a', 'BOSS');
+  toast('BOSS DOWN', '#F8F3E9', 'GRAB THE LOOT');
+  phase = 'clear'; bossT = 3.5;
+}
+function enemyShot(x, y, ang, spd) {
+  const m = new THREE.Mesh(ebGeo, ebMat); m.position.set(x, y, 0); scene.add(m);
+  ebullets.push({ m, x, y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd });
+}
+function spawnCrate(vault = false) {
+  const size = vault ? 1.9 : 1;
+  const holder = new THREE.Group();
+  const mat = null, box = DouxAssets.makeCrate(); box.scale.setScalar(size * 1.1); holder.add(box);
+  const bg = new THREE.Mesh(barGeo, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6, depthWrite: false }));
+  const fg = new THREE.Mesh(barGeo, new THREE.MeshBasicMaterial({ color: vault ? 0xf5c542 : 0x9be3b4 }));
+  bg.position.set(0, 1.35 * size + 0.2, 0.9 * size); fg.position.copy(bg.position); fg.position.z += 0.01;
+  bg.scale.x = fg.scale.x = size; holder.add(bg, fg);
+  const x = vault ? 0 : rand(-B.halfW * 0.8, B.halfW * 0.8);
+  holder.position.set(x, B.top + size, 0); scene.add(holder);
+  const max = vault ? 55 + 25 * level : 14 + 6 * level;
+  crates.push({ g: holder, box, fg, mat, x, y: B.top + size, vy: -(vault ? 1.4 : 2.4) * (1 + 0.05 * (level - 1)), hp: max, max, size, vault, hitT: 0, sizeX: size, shotT: 2 });
+  if (vault) { toast('VAULT INCOMING', '#f3dc9a', 'IT SHOOTS BACK'); tone(220, 440, 0.5, 'sawtooth', 0.05); }
+}
+function addRing(x, y, col, maxR = 14, life = 0.9) {
+  const m = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 64), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+  m.position.set(x, y, 0); scene.add(m); rings.push({ m, t: 0, life, maxR });
+}
+
+/* ---------- Actions ---------- */
+// every award passes through here, so one number tunes how fast scores climb
+const SCORE_SCALE = 0.5;
+function addScore(pts, x, y, col, label) {
+  pts = Math.max(1, Math.round(pts * SCORE_SCALE * mult() * (fx.dbl > 0 ? 2 : 1)));
+  score += pts;
+  if (x !== undefined) popup((label ? label + ' ' : '') + '+' + pts, x, y, col);
+}
+function fire() {
+  const boost = fx.boost > 0;
+  fireT = (0.2 - 0.012 * (power - 1)) * (boost ? 0.5 : 1);
+  const mx = ship.x + ship.muzzle.x * 0.6, my = ship.y + 0.8;
+  // [sideways offset, angle] per bullet, one row per firepower level
+  const shots = [
+    [[0, 0]],
+    [[-0.22, 0], [0.22, 0]],
+    [[0, 0], [-0.1, -0.16], [0.1, 0.16]],
+    [[-0.22, 0], [0.22, 0], [-0.3, -0.24], [0.3, 0.24]],
+    [[0, 0], [-0.2, -0.15], [0.2, 0.15], [-0.34, -0.32], [0.34, 0.32]],
+  ][power - 1];
+  shots.forEach(([ox, a]) => {
+    const m = new THREE.Mesh(bulletGeo, boost ? bulletMatBoost : bulletMat);
+    m.rotation.z = -a; m.position.set(mx + ox, my, 0); scene.add(m);
+    bullets.push({ m, x: mx + ox, y: my, vx: Math.sin(a) * 24, vy: Math.cos(a) * 24 });
+  });
+  tone(880, 320, 0.05, 'square', 0.012);
+}
+function hurt() {
+  if (invuln > 0 || dashT > 0 || state !== 'play') return;
+  if (fx.shield > 0) return;
+  hp--; invuln = 1.6; shake = 0.6; buzz(60);
+  if (power > 1) { power--; toast('FIREPOWER DOWN', '#ff6a6a', 'LEVEL ' + power); }
+  else if (combo >= 5) toast('COMBO LOST', '#ff6a6a');
+  powerXp = 0; combo = 0;
+  flash('rgba(255,60,60,.55)', 450);
+  burst(ship.x, ship.y, '#ff6a3a', 40, 7, 0.7);
+  tone(240, 50, 0.35, 'sawtooth', 0.12); boom(0.35, 0.25);
+  if (hp <= 0) die();
+}
+function die() {
+  state = 'dying'; deadT = 1.4;
+  ship.group.visible = false;
+  burst(ship.x, ship.y, '#ffffff', 120, 12, 1.4); burst(ship.x, ship.y, '#6fe8ff', 80, 8, 1.2);
+  addRing(ship.x, ship.y, 0xffffff, 10, 1);
+  shake = 1.2; boom(1, 0.4);
+}
+function killRock(i, drop = true) {
+  const r = rocks[i];
+  burst(r.x, r.y, r.g.material === hotRockMat ? '#ff7a3a' : '#c9b8a8', 22 + r.r * 18, 5 + r.r * 3, 0.7);
+  burst(r.x, r.y, '#fff3d0', 8, 3, 0.4);
+  scene.remove(r.g); rocks.splice(i, 1);
+  if (drop) {
+    bump();
+    if (r.gift) spawnCoin(r.gift, r.x, r.y, 0, -2);
+    else if (r.r > 0.95) { spawnRock(r.x - 0.4, r.y, r.r * 0.55, -rand(1.2, 2.4)); spawnRock(r.x + 0.4, r.y, r.r * 0.55, rand(1.2, 2.4)); }
+    else if (Math.random() < 0.3) spawnCoin(Math.random() < 0.5 ? 'doux' : 'ngn', r.x, r.y, 0, -2);
+  }
+  boom(0.25, 0.12);
+}
+function killDrone(i) {
+  const d = drones[i];
+  burst(d.x, d.y, d.runner ? '#ffb43a' : '#ff4a6a', 34, 8, 0.8); burst(d.x, d.y, '#ffffff', 10, 4, 0.4);
+  addRing(d.x, d.y, d.runner ? 0xff9a1f : 0xff4a6a, 4, 0.5);
+  bump(); addScore(d.runner ? 100 : d.heavy ? 60 : d.mini ? 8 : 25, d.x, d.y, d.runner ? CUR.btc.col : '#ff8a9a', d.runner ? 'RUNNER' : d.heavy ? 'HEAVY' : '');
+  if (d.heavy) spawnCoin('doux', d.x + 0.5, d.y, 1.5, -2);
+  const roll = Math.random();
+  if (d.runner) spawnCoin('btc', d.x, d.y, 0, -2);
+  else if (roll < (d.mini ? 0.4 : 0.5)) spawnCoin('doux', d.x, d.y, 0, -2);
+  else if (!d.mini && roll < 0.85) spawnCoin(pickWeighted({ ngn: 40, usd: 15, gbp: 15, sol: 12, eur: 9, usdt: hp < maxHp ? 9 : 2 }), d.x, d.y, 0, -2);
+  scene.remove(d.g); drones.splice(i, 1);
+  boom(0.3, 0.16);
+}
+function breakCrate(i) {
+  const c = crates[i];
+  const n = c.gift ? c.gift.length : c.vault ? 10 + level : 4 + (Math.random() * 2 | 0);
+  bump();
+  for (let k = 0; k < n; k++) {
+    const a = Math.random() * Math.PI * 2, s = rand(3, c.vault ? 11 : 8);
+    const type = c.gift ? c.gift[k] : c.vault ? pickWeighted({ ngn: 30, usd: 18, eur: 12, gbp: 12, usdt: 12, btc: 10 }) : pickWeighted({ doux: 40, ngn: 30, usd: 12, eur: 8, gbp: 10, sol: 8, usdt: 8, btc: 3 });
+    spawnCoin(type, c.x, c.y, Math.cos(a) * s, Math.sin(a) * s);
+  }
+  burst(c.x, c.y, '#f3dc9a', c.vault ? 160 : 70, c.vault ? 14 : 9, 1.1);
+  burst(c.x, c.y, '#ffffff', 40, 6, 0.6);
+  addRing(c.x, c.y, 0xf5c542, c.vault ? 12 : 6, 0.7);
+  addScore(c.vault ? 200 : 40, c.x, c.y, '#f3dc9a', c.vault ? 'VAULT' : 'CRATE');
+  shake = c.vault ? 0.9 : 0.4;
+  if (c.vault) { flash('rgba(245,197,66,.45)', 600); toast('VAULT CRACKED', '#f3dc9a'); }
+  scene.remove(c.g); crates.splice(i, 1);
+  boom(c.vault ? 0.9 : 0.5, 0.3); tone(400, 1200, 0.3, 'triangle', 0.06);
+}
+function chargeDoux(n) {
+  if (naira >= NOVA_MAX) return;
+  naira = Math.min(NOVA_MAX, naira + n);
+  if (naira >= NOVA_MAX) { toast('DOUX CHARGE READY', CUR.ngn.col, 'TAP DOUX OR PRESS B'); tone(523, 1047, 0.3, 'triangle', 0.06); }
+}
+function nairaNova() {
+  if (state !== 'play' || naira < NOVA_MAX) return;
+  naira = 0;
+  toast('DOUX CHARGE', CUR.ngn.col, 'SCREEN CLEARED');
+  flash('rgba(155,227,180,.55)', 700);
+  addRing(ship.x, ship.y, 0x9be3b4, 26, 1.1); addRing(ship.x, ship.y, 0xffffff, 18, 0.8);
+  for (let i = rocks.length - 1; i >= 0; i--) {
+    const r = rocks[i]; burst(r.x, r.y, '#9be3b4', 25, 5, 0.8);
+    scene.remove(r.g); rocks.splice(i, 1); score += 2 * mult();
+  }
+  ebullets.forEach(b => { burst(b.x, b.y, '#9be3b4', 6, 3, 0.4); scene.remove(b.m); }); ebullets = [];
+  for (let i = drones.length - 1; i >= 0; i--) { drones[i].hp -= 4; if (drones[i].hp <= 0) killDrone(i); }
+  crates.forEach(c => { c.hp -= 12; c.hitT = 0.3; });
+  [...bosses].forEach(b => damageBoss(25, b));
+  fx.magnet = FXMAX.magnet; shake = 0.7; invuln = Math.max(invuln, 0.8);
+  [523, 659, 784, 1047].forEach((f, i) => tone(f, f * 1.01, 0.25, 'triangle', 0.07, i * 0.07));
+}
+function collect(i) {
+  const c = coins[i], t = c.type, d = CUR[t];
+  wallet[t] = (wallet[t] || 0) + 1;
+  bump();
+  addScore(d.val, c.x, c.y + 0.3, d.col, d.g.length > 2 ? '' : d.g);
+  burst(c.x, c.y, d.col, 16, 4, 0.5);
+  tone(1100, 1700, 0.07, 'triangle', 0.05); tone(1650, 2200, 0.08, 'sine', 0.035, 0.05);
+  switch (t) {
+    case 'doux':
+      if (power >= POWER_MAX) { addScore(5); break; }
+      if (++powerXp >= powerNeed()) {
+        power++; powerXp = 0; buzz(20);
+        toast('FIREPOWER UP', d.col, power === POWER_MAX ? 'MAXED OUT' : 'LEVEL ' + power);
+        addRing(ship.x, ship.y, 0xf8f3e9, 6, 0.6);
+        [523, 784, 1047].forEach((f, i) => tone(f, f, 0.12, 'triangle', 0.06, i * 0.06));
+      }
+      break;
+    case 'ngn': chargeDoux(1); break;
+    case 'usd': fx.boost = FXMAX.boost; toast('RAPID FIRE', d.col); break;
+    case 'eur': fx.shield = FXMAX.shield; toast('SHIELD', d.col); tone(300, 900, 0.3, 'sine', 0.05); break;
+    case 'gbp': fx.dbl = FXMAX.dbl; toast('DOUBLE SCORE', d.col); break;
+    case 'sol': fx.slow = FXMAX.slow; toast('SLOW TIME', d.col); tone(900, 200, 0.4, 'sine', 0.05); break;
+    case 'usdt': if (hp < maxHp) { hp++; toast('HULL REPAIRED', d.col); } else addScore(20); break;
+    case 'btc': burst(c.x, c.y, '#ffd08a', 60, 9, 1); addRing(c.x, c.y, 0xff9a1f, 7, 0.6); shake = 0.3; toast('JACKPOT', d.col, '₿ +' + d.val * mult()); break;
+  }
+  scene.remove(c.g); coins.splice(i, 1);
+}
+
+/* ---------- Input ---------- */
+const keys = {};
+let ctrl = 'keys';
+// Only the finger that started steering moves the ship. A second finger can tap Ghost or Doux charge without
+// dragging the ship toward the button, and lifting that finger does not end the steer.
+let steerId = null;
+const target = new THREE.Vector2();
+addEventListener('keydown', e => {
+  if (e.target instanceof HTMLInputElement) return;
+  const k = e.key.toLowerCase();
+  if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+  keys[k] = true;
+  if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(k)) ctrl = 'keys';
+  if (k === ' ') holdFire = true;
+  if (k === 'p' || k === 'escape') togglePause();
+  if (k === 'm') setOpt('sound', !SET.sound);
+  if (k === 'f') setOpt('auto', !SET.auto);
+  if (k === 'b') nairaNova();
+  if (k === 'shift') dash();
+  if (k === 'enter' && state === 'over') startGame();
+  if (k === 'enter' && state === 'menu' && !$('#menu').classList.contains('hidden')) $('#bStart').click();
+});
+addEventListener('keyup', e => { const k = e.key.toLowerCase(); keys[k] = false; if (k === ' ') holdFire = false; });
+function pointerToTarget(e, offsetY) {
+  const p = planeAt(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  target.set(p.x, p.y + offsetY);
+}
+canvas.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'touch' && steerId !== null) return;   // already steering with another finger
+  steerId = e.pointerId; ctrl = 'pointer';
+  pointerToTarget(e, e.pointerType === 'touch' ? 1.6 : 0);
+  if (e.pointerType !== 'touch') holdFire = true;
+});
+addEventListener('pointermove', e => {
+  if (e.pointerType === 'touch' ? e.pointerId !== steerId : e.target !== canvas) return;
+  ctrl = 'pointer'; pointerToTarget(e, e.pointerType === 'touch' ? 1.6 : 0);
+});
+const endSteer = e => { if (e.pointerId === steerId) { steerId = null; holdFire = false; } };
+addEventListener('pointerup', endSteer);
+addEventListener('pointercancel', endSteer);
+addEventListener('blur', () => { steerId = null; holdFire = false; });
+document.addEventListener('visibilitychange', () => { steerId = null; holdFire = false; if (document.hidden && state === 'play') togglePause(); });
+
+$('#bStart').onclick = () => (playerName || !lbOn() ? startGame() : openName('play'));   // no board, no name to ask for
+$('#bAgain').onclick = () => startGame();
+$('#bResume').onclick = () => togglePause();
+$('#bPause').onclick = () => togglePause();
+
+/* ---------- Settings, help, menu ---------- */
+function setOpt(key, on) {
+  SET[key] = on; save('coinrun_settings', SET);
+  muted = !SET.sound; autoFire = SET.auto;
+  [['#sSound', 'sound'], ['#sAuto', 'auto'], ['#sHaptics', 'haptics']].forEach(([sel, k]) => {
+    $(sel).setAttribute('aria-pressed', SET[k]); $(sel).querySelector('span').textContent = SET[k] ? 'On' : 'Off';
+  });
+  renderHUD();
+}
+$('#sSound').onclick = () => setOpt('sound', !SET.sound);
+$('#sAuto').onclick = () => setOpt('auto', !SET.auto);
+$('#sHaptics').onclick = () => { setOpt('haptics', !SET.haptics); buzz(30); };
+// How to play, Settings and the leaderboard each open over the menu or the pause screen, and hand back to whichever it was.
+const sheetFrom = { '#helpOv': '#menu', '#setOv': '#menu', '#boardOv': '#menu' };
+function openSheet(sheet, from) { sheetFrom[sheet] = from; $(from).classList.add('hidden'); $(sheet).classList.remove('hidden'); $(sheet).scrollTop = 0; }
+function closeSheet(sheet) { $(sheet).classList.add('hidden'); $(sheetFrom[sheet]).classList.remove('hidden'); }
+$('#bHelp').onclick = () => openSheet('#helpOv', '#menu');
+$('#bSet').onclick = () => openSheet('#setOv', '#menu');
+$('#bPauseHelp').onclick = () => openSheet('#helpOv', '#pauseOv');
+$('#bPauseSet').onclick = () => openSheet('#setOv', '#pauseOv');
+$('#bHelpClose').onclick = () => closeSheet('#helpOv');
+$('#bSetClose').onclick = () => closeSheet('#setOv');
+$('#bBoard').onclick = () => { openSheet('#boardOv', '#menu'); loadBoard(); };
+$('#bBoardClose').onclick = () => closeSheet('#boardOv');
+const tabs = [...document.querySelectorAll('.tab')];
+function showTab(tab) {
+  tabs.forEach(t => { const on = t === tab; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; $('#' + t.getAttribute('aria-controls')).classList.toggle('hidden', !on); });
+}
+tabs.forEach((t, i) => {
+  t.onclick = () => showTab(t);
+  t.onkeydown = e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; showTab(next); next.focus();
+  };
+});
+showTab(tabs[0]);
+// Top scores are kept on this device only; there is no shared leaderboard yet.
+let scores = [];
+try { const raw = JSON.parse(localStorage.getItem('coinrun_scores_v4') || '[]'); if (Array.isArray(raw)) scores = raw; } catch (e) { scores = []; }
+if (!scores.length && best) scores = [{ s: best, l: 0, d: Date.now() }];   // carry over a best set before the list existed
+function recordScore() {
+  if (score <= 0) return 0;
+  const entry = { s: score, l: level, d: Date.now() };
+  scores.push(entry); scores.sort((a, b) => b.s - a.s); scores = scores.slice(0, 10);
+  save('coinrun_scores_v4', scores);
+  return scores.indexOf(entry) + 1;   // 0 when the run did not make the top ten
+}
+/* ---------- Player name and shared leaderboard ---------- */
+// Supabase project for the shared board. The key is the public (anon) one: it is meant to ship in the page.
+// The database lets it read the boards, and claim a name or post a score only through the arcade_ functions.
+// Left empty, the game keeps to this device.
+const LB = { url: '', key: '' };   // your Supabase project URL and publishable key; see the README
+const lbOn = () => !!(LB.url && LB.key);
+const NAME_OK = /^[A-Za-z0-9 _-]{2,16}$/;
+// Arcade name: one per player across every Doux Arcade game, and no one else can take it. This browser's secret key,
+// kept in a cookie, is what proves the name is yours. There is no sign-in.
+// When the games live on different subdomains of one site, set COOKIE_DOMAIN to that site (for example 'example.com')
+// in every game so they share the cookie. Left empty, the cookie stays on this address.
+const COOKIE_DOMAIN = '';
+const KEY_NAME = 'doux_player', KEY_OK = /^[a-f0-9]{64}$/;
+function playerKey() {
+  const m = document.cookie.match(/(?:^|; )doux_player=([a-f0-9]{64})/);
+  let key = m ? m[1] : '';
+  if (!key) { try { key = localStorage.getItem(KEY_NAME) || ''; } catch (e) { key = ''; } }   // the cookie was cleared but this game kept a copy
+  if (!KEY_OK.test(key)) key = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
+  const shared = COOKIE_DOMAIN && (location.hostname === COOKIE_DOMAIN || location.hostname.endsWith('.' + COOKIE_DOMAIN)) ? '; domain=' + COOKIE_DOMAIN : '';
+  document.cookie = `${KEY_NAME}=${key}; path=/; max-age=34560000; samesite=lax${location.protocol === 'https:' ? '; secure' : ''}${shared}`;
+  try { localStorage.setItem(KEY_NAME, key); } catch (e) { /* storage unavailable: the cookie alone carries it */ }
+  return key;
+}
+const PLAYER_KEY = playerKey();
+let playerName = '';
+try { playerName = localStorage.getItem('coinrun_name_v2') || ''; } catch (e) { playerName = ''; }   // last known name, until the database confirms it
+let board = { state: 'idle', rows: [] };   // idle | loading | ready | error
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function lbFetch(path, init = {}) {
+  const res = await fetch(LB.url + '/rest/v1/' + path, { ...init, headers: { apikey: LB.key, Authorization: 'Bearer ' + LB.key, 'Content-Type': 'application/json', ...init.headers } });
+  if (!res.ok) throw new Error('Leaderboard request failed: ' + res.status);
+  return res;
+}
+async function rpc(fn, args) { return (await lbFetch('rpc/' + fn, { method: 'POST', body: JSON.stringify(args) })).json(); }
+function rememberName(name) {
+  playerName = name;
+  try { name ? localStorage.setItem('coinrun_name_v2', name) : localStorage.removeItem('coinrun_name_v2'); } catch (e) { /* storage unavailable: the name lasts for this visit */ }
+  $('#sNameVal').textContent = name || 'Not set';
+}
+// Pick up a name claimed in another arcade game, or drop one this browser no longer owns.
+if (lbOn()) rpc('arcade_whoami', { p_token: PLAYER_KEY }).then(name => rememberName(name || '')).catch(() => { /* offline: keep the last known name */ });
+async function loadBoard() {
+  if (!lbOn()) return;
+  board = { state: 'loading', rows: board.rows }; menuStats();
+  try {
+    const res = await lbFetch('coinrun_leaderboard?select=player_name,score,level&order=score.desc&limit=10');
+    board = { state: 'ready', rows: await res.json() };
+  } catch (e) { board = { state: 'error', rows: [] }; }
+  menuStats();
+}
+async function submitScore() {
+  if (!lbOn() || !playerName || score <= 0) return;
+  let result = '';
+  try { result = await rpc('arcade_submit_score', { p_token: PLAYER_KEY, p_game: 'coin_run', p_score: score, p_level: level }); } catch (e) { result = 'offline'; }
+  if (result === 'no_player') { rememberName(''); $('#oNote').textContent = 'Pick a name in Settings to get on the leaderboard.'; }
+  else if (result !== 'ok') $('#oNote').textContent = "Couldn't reach the leaderboard. Your score is saved on this device.";
+  loadBoard();
+}
+let nameThen = 'play';
+function openName(then) {
+  nameThen = then;
+  ['#menu', '#setOv'].forEach(sel => $(sel).classList.add('hidden'));
+  $('#nameOv').classList.remove('hidden'); $('#nameErr').textContent = '';
+  $('#nameIn').value = playerName; $('#nameIn').focus();
+}
+function closeName() { $('#nameOv').classList.add('hidden'); $(nameThen === 'settings' ? '#setOv' : '#menu').classList.remove('hidden'); }
+$('#bNameBack').onclick = closeName;
+$('#sName').onclick = () => openName('settings');
+$('#nameForm').onsubmit = async e => {
+  e.preventDefault();
+  const name = $('#nameIn').value.trim().replace(/\s+/g, ' '), err = $('#nameErr'), go = $('#nameGo');
+  if (!NAME_OK.test(name)) { err.textContent = 'Use 2 to 16 letters, numbers or spaces.'; $('#nameIn').focus(); return; }
+  if (lbOn()) {
+    err.textContent = ''; go.disabled = true; go.textContent = 'Checking…';
+    let result = '';
+    try { result = await rpc('arcade_claim_name', { p_token: PLAYER_KEY, p_name: name }); } catch (e2) { result = 'offline'; }
+    go.disabled = false; go.textContent = 'Continue';
+    if (result === 'taken') { err.textContent = 'Someone already has that name. Try another.'; $('#nameIn').focus(); return; }
+    if (result !== 'ok') { err.textContent = "Couldn't reach the leaderboard to save your name. Check your connection and try again."; return; }
+  }
+  rememberName(name);
+  if (nameThen === 'play') { $('#nameOv').classList.add('hidden'); startGame(); } else closeName();
+};
+function menuStats() {
+  $('#sNameVal').textContent = playerName || 'Not set';
+  const shared = lbOn() && board.state !== 'error', row = (rank, a, b) => `<li><span>${rank}</span><b>${a}</b><span>${b}</span></li>`;
+  $('#scoresTitle').textContent = shared ? 'Leaderboard' : 'Top scores on this device';
+  let html = '';
+  if (!shared) html = scores.slice(0, 5).map((r, i) => row(i + 1, r.s.toLocaleString(), r.l ? 'Level ' + r.l : '')).join('') || '<li class="msg">No scores on this device yet.</li>';
+  else if (board.state === 'ready' && !board.rows.length) html = '<li class="msg">No scores yet. Be the first.</li>';
+  else if (!board.rows.length) html = '<li class="msg">Loading scores…</li>';
+  else html = board.rows.map((r, i) => row(i + 1, esc(r.player_name), Number(r.score).toLocaleString())).join('');
+  $('#scoreList').innerHTML = html;
+  $('#boardNote').textContent = lbOn() && board.state === 'error' ? "Couldn't load the leaderboard, so these are this device's scores." : '';
+  const notes = [];
+  if (META.streak > 1 && META.last) notes.push(META.streak + '-day streak');
+  $('#menuStats').textContent = notes.join(' ');
+}
+function toMenu() {
+  clearAll(); state = 'menu';
+  ['#overOv', '#pauseOv', '#helpOv', '#setOv', '#boardOv', '#hud'].forEach(sel => $(sel).classList.add('hidden'));
+  $('#menu').classList.remove('hidden'); menuStats(); loadBoard();
+}
+$('#bQuit').onclick = toMenu;
+$('#bOverMenu').onclick = toMenu;
+const PLAY_URL = location.origin + location.pathname;   // wherever this copy is hosted
+$('#bShare').onclick = async () => {
+  // the link rides inside the text: some share targets drop a separate url field
+  const text = (won ? `I beat all ten levels of Coin Run with ${score.toLocaleString()} points. Beat that:` : `I scored ${score.toLocaleString()} on Coin Run and reached level ${level}. Beat that:`) + ' ' + PLAY_URL;
+  try {
+    if (navigator.share) await navigator.share({ text });
+    else { await navigator.clipboard.writeText(text); $('#bShare').textContent = 'Copied'; }
+  } catch (e) { /* share sheet dismissed */ }
+};
+// Act on touch-down, not on release, so each button answers at once, even while another finger is steering.
+[['#bNova', nairaNova], ['#bDash', dash]].forEach(([sel, act]) => {
+  $(sel).addEventListener('pointerdown', e => { e.preventDefault(); act(); });
+  $(sel).onclick = e => { if (e.detail === 0) act(); };   // Enter or Space on the focused button
+});
+
+function togglePause() {
+  if (state === 'play') { state = 'pause'; $('#pauseOv').classList.remove('hidden'); }
+  else if (state === 'pause') { state = 'play'; $('#pauseOv').classList.add('hidden'); last = performance.now(); }
+}
+
+function clearAll() {
+  [...coins, ...rocks, ...crates, ...drones].forEach(o => scene.remove(o.g));
+  bosses.forEach(b => scene.remove(b.g)); bosses = []; finalQueue = [];
+  [...bullets, ...ebullets].forEach(b => scene.remove(b.m)); rings.forEach(r => scene.remove(r.m));
+  coins = []; rocks = []; crates = []; bullets = []; rings = []; drones = []; ebullets = [];
+}
+function startGame() {
+  initAudio(); clearAll();
+  score = 0; hp = 3; maxHp = 3; won = false; level = 1; levelT = 0; vaultSpawned = false; naira = 0; wallet = {};
+  for (const k in fx) fx[k] = 0;
+  invuln = 1.2; fireT = 0; rockT = 4; crateT = 14; droneT = 6; runnerT = 14; shake = 0; runT = 0; bossKills = 0; practice = false; dashT = 0; dashCd = 0;
+  touchStreak();
+  // Open on a high: rapid fire and a coin magnet from the first frame, a row of one-hit rocks that
+  // each pay out (the four fiat currencies and a Doux coin), then a gift crate with enough Doux coins for firepower 3.
+  fx.boost = 6; fx.magnet = 7; coinT = 5;
+  opening = [
+    [0.5, () => [-2, -1, 0, 1, 2].forEach(k => {
+      const r = spawnRock(k * Math.min(1.3, B.halfW / 3), B.top + Math.abs(k) * 0.9, 0.5, 0);
+      r.hp = 1; r.vy = -4.5; r.gift = ['ngn', 'usd', 'doux', 'gbp', 'eur'][k + 2];   // all four fiat currencies on show first
+    })],
+    [2.8, () => {
+      spawnCrate(false);
+      const c = crates[crates.length - 1];
+      c.x = 0; c.hp = c.max = 6; c.gift = ['doux', 'doux', 'doux', 'doux', 'doux', 'doux', 'sol'];
+    }],
+  ];
+  // First ever run: two short pointers, timed between the scripted beats above.
+  if (!META.seen) {
+    opening.push([1.9, () => toast('GRAB THE COINS', '#F8F3E9', 'DOUX COINS RAISE YOUR FIREPOWER')], [6.5, () => toast('THREE HULL POINTS', '#F8F3E9', 'A HIT COSTS ONE FIREPOWER LEVEL')]);
+    opening.sort((a, b) => a[0] - b[0]);
+  }
+  combo = 0; comboT = 0; maxMult = 1; power = 1; powerXp = 0; phase = 'wave'; bossT = 0;
+  ship.x = 0; ship.y = B.minY + 1.5; ship.vx = ship.vy = 0; target.set(ship.x, ship.y); ctrl = 'keys';
+  ship.group.visible = true;
+  ['#menu', '#overOv', '#pauseOv', '#helpOv', '#setOv', '#boardOv', '#nameOv'].forEach(s => $(s).classList.add('hidden'));
+  $('#hud').classList.remove('hidden');
+  state = 'play';
+  toast('LAUNCH BOOST', CUR.usd.col, 'RAPID FIRE · COIN MAGNET');
+  tone(330, 660, 0.25, 'triangle', 0.06); tone(495, 990, 0.3, 'triangle', 0.05, 0.12);
+  renderHUD();
+}
+/* A light-hearted line for the result card: the score imagined as real money.
+   Every figure is a physical fact (note sizes, coin weights, supply caps), never an exchange rate. */
+const num = (n, d = 0) => n.toLocaleString(undefined, { maximumFractionDigits: d });
+const len = cm => cm < 1 ? num(cm * 10, 1) + ' mm' : cm < 100 ? num(cm, 1) + ' cm' : cm < 100000 ? num(cm / 100, 1) + ' m' : num(cm / 100000, 1) + ' km';
+const FUN_NOTES = [
+  s => `As $1 bills in one stack, your score would stand ${len(s * 0.011)} tall.`,
+  s => `In £1 coins, your score would weigh ${s * 8.75 < 1000 ? num(s * 8.75) + ' g. Pocket change' : num(s * 8.75 / 1000, 1) + ' kg. Bring a strong bag'}.`,
+  s => `Stack your score in €1 coins and the tower reaches ${len(s * 0.233)}.`,
+  s => `Lay your score out in ₦1,000 notes, end to end, and the line runs ${len(s * 15.1)}.`,
+  s => `As satoshis, your score is ${(s / 1e8).toFixed(8)} of a Bitcoin. Everyone starts somewhere.`,
+  s => `If every point were a whole Bitcoin, you would hold ${num(s / 21e6 * 100, s < 2100 ? 6 : 3)}% of all that will ever exist.`,
+  s => `Your score in Tether is worth exactly ${num(s)} dollars. That is the whole idea of Tether.`,
+  s => s < 365 ? `Saving a dollar a day, you would bank your score in ${num(s)} ${s === 1 ? 'day' : 'days'}.` : `Saving a dollar a day, you would bank your score in ${num(s / 365, 1)} years.`,
+  (s, t) => `Solana makes a new block about every 0.4 seconds. It made around ${num(t / 0.4)} while you were flying.`,
+  (s, t) => t < 600 ? `Bitcoin takes about ten minutes to make one block. Your run was ${num(t / 600 * 100)}% of the way there.` : `Bitcoin takes about ten minutes to make one block. You outlasted ${Math.floor(t / 600) === 1 ? 'one' : Math.floor(t / 600)} of them.`,
+];
+let lastFun = -1;
+function funNote() {
+  if (score < 1) return '';
+  let i; do { i = Math.floor(Math.random() * FUN_NOTES.length); } while (i === lastFun);
+  lastFun = i;
+  return FUN_NOTES[i](score, runT);
+}
+function gameOver() {
+  state = 'over';
+  const isBest = !practice && score > best;
+  if (isBest) { best = score; try { localStorage.setItem('coinrun_best_v4', best); } catch (e) { /* storage unavailable */ } }
+  if (!META.seen) { META.seen = true; save('coinrun_meta', META); }
+  $('#oTitle').textContent = won ? 'Congratulations!' : score < 150 ? 'Rough flight.' : score < 800 ? 'Solid run.' : score < 2500 ? 'Sharp flying!' : score < 7000 ? 'Phenomenal run!' : 'Legendary run!';
+  $('#oScore').textContent = score.toLocaleString();
+  const rank = practice ? 0 : recordScore();
+  $('#oBestLine').textContent = isBest && score > 0 ? 'New personal best' : rank ? 'Number ' + rank + ' on this device' : best ? 'Best ' + best.toLocaleString() : '';
+  const coinTotal = TYPES.reduce((n, t) => n + (wallet[t] || 0), 0);
+  $('#overWallet').innerHTML = coinTotal ? `<span>${chipHtml(CUR.doux.g, CUR.doux.col)}${coinTotal.toLocaleString()} ${coinTotal === 1 ? 'coin' : 'coins'} collected</span>` : '';
+  $('#oFun').textContent = funNote();
+  $('#oNote').textContent = practice ? 'Practice run. This score is not saved.' : won ? 'You beat all ten levels.' : '';
+  if (!practice) submitScore();
+  $('#bShare').textContent = 'Share';
+  $('#hud').classList.add('hidden'); $('#overOv').classList.remove('hidden');
+}
+
+/* ---------- Update ---------- */
+function updateShip(dt) {
+  const spd = (fx.boost > 0 ? 13 : 10.5) * (1);
+  let tx = 0, ty = 0;
+  if (keys['arrowleft'] || keys['a']) tx -= 1; if (keys['arrowright'] || keys['d']) tx += 1;
+  if (keys['arrowup'] || keys['w']) ty += 1; if (keys['arrowdown'] || keys['s']) ty -= 1;
+  const px = ship.x, py = ship.y;
+  if (ctrl === 'keys') {
+    const l = Math.hypot(tx, ty) || 1;
+    ship.x += tx / l * spd * dt; ship.y += ty / l * spd * dt;
+  } else {
+    // eased toward the pointer but speed-capped, so a pointer that reappears far away is flown to, not jumped to
+    const f = 1 - Math.exp(-14 * dt), dx = (target.x - ship.x) * f, dy = (target.y - ship.y) * f;
+    const k = Math.min(1, 34 * dt / (Math.hypot(dx, dy) || 1));
+    ship.x += dx * k; ship.y += dy * k;
+  }
+  ship.x = clamp(ship.x, -B.halfW, B.halfW); ship.y = clamp(ship.y, B.minY, B.maxY);
+  const vx = (ship.x - px) / Math.max(dt, 1e-4), vy = (ship.y - py) / Math.max(dt, 1e-4);
+  ship.vx += (vx - ship.vx) * Math.min(1, dt * 10); ship.vy += (vy - ship.vy) * Math.min(1, dt * 10);
+  const g = ship.group, t = performance.now() / 1000;
+  g.position.set(ship.x, ship.y + Math.sin(t * 3) * 0.05, 0);
+  g.rotation.y = clamp(-ship.vx * 0.045, -0.6, 0.6);
+  g.rotation.z = clamp(-ship.vx * 0.02, -0.25, 0.25);
+  ship.body.rotation.x = 0.32 + clamp(ship.vy * 0.015, -0.15, 0.15);
+  const hull = ship.body.children[0].material; hull.transparent = true; hull.opacity = dashT > 0 ? 0.3 : 1;   // see-through for exactly as long as Ghost protects
+  ship.group.visible = state === 'play' ? (invuln > 0 && dashT <= 0 ? Math.floor(t * 20) % 2 === 0 : true) : state !== 'dying' && state !== 'over';
+
+  const boost = fx.boost > 0, thr = 1 + clamp(ship.vy * 0.05, -0.4, 0.8) + (boost ? 0.5 : 0);
+  const fcol = boost ? 0xffc85a : 0x6fe8ff;
+  ship.flames.forEach((f, i) => { f.material.color.setHex(fcol); const s = (0.55 + Math.random() * 0.25) * thr; f.scale.set(s, s * 1.5, 1); });
+  ship.light.color.setHex(fcol);
+  if (state === 'play') {
+    ship.engines.forEach(e => {
+      const wp = new THREE.Vector3(e.x, e.y, 0).applyEuler(g.rotation);
+      emit(ship.x + wp.x + rand(-0.06, 0.06), ship.y + wp.y - 0.05, rand(-0.1, 0.1), rand(-0.4, 0.4), -rand(4, 7) * thr, 0, boost ? '#ffb43a' : '#3fc8ff', rand(0.18, 0.35));
+    });
+  }
+  ship.shield.visible = fx.shield > 0 && (fx.shield > 1.5 || Math.floor(t * 10) % 2 === 0);
+  ship.shield.rotation.y += dt * 0.8; ship.shield.rotation.x += dt * 0.5;
+  ship.magnet.visible = fx.magnet > 0;
+  ship.magnet.scale.setScalar(1 + Math.sin(t * 8) * 0.08); ship.magnet.rotation.z += dt * 2;
+}
+
+function update(dt) {
+  const t = performance.now() / 1000;
+  const playing = state === 'play';
+  const starBoost = fx.boost > 0 && playing ? 3.2 : 1;
+  for (let i = 0; i < STAR_N; i++) {
+    starPos[i * 3 + 1] -= starSpd[i] * starBoost * dt * (state === 'menu' ? 1.5 : 1) * speedMul();
+    if (starPos[i * 3 + 1] < -22) { starPos[i * 3 + 1] = 45; starPos[i * 3] = rand(-45, 45); }
+  }
+  starGeo.attributes.position.needsUpdate = true;
+  stars.material.size = fx.boost > 0 && playing ? 0.24 : 0.16;
+
+  if (state === 'menu') {
+    ship.group.visible = true;
+    ship.x = Math.sin(t * 0.7) * 2.5; ship.y = B.minY + 3 + Math.sin(t * 1.3) * 0.6;
+    ship.group.position.set(ship.x, ship.y, 0);
+    ship.group.rotation.y = Math.cos(t * 0.7) * -0.4;
+    ship.engines.forEach(e => emit(ship.x + e.x, ship.y + e.y, 0, rand(-0.4, 0.4), -rand(4, 7), 0, '#3fc8ff', 0.3));
+    ship.flames.forEach(f => { const s = 0.55 + Math.random() * 0.25; f.scale.set(s, s * 1.5, 1); });
+  }
+
+  if (playing) {
+    // boosts picked up from boss loot wait for the next level instead of burning off in the lull
+    if (phase !== 'clear') for (const k in fx) fx[k] = Math.max(0, fx[k] - dt);
+    invuln = Math.max(0, invuln - dt); dashT = Math.max(0, dashT - dt); dashCd = Math.max(0, dashCd - dt);
+    updateShip(dt);
+    if (dashT > 0) { emit(ship.x + rand(-0.4, 0.4), ship.y + rand(-0.6, 0.6), 0, rand(-1, 1), rand(-3, -1), 0, '#F8F3E9', 0.18); emit(ship.x + rand(-0.4, 0.4), ship.y + rand(-0.6, 0.6), 0, rand(-1, 1), rand(-3, -1), 0, '#9be3b4', 0.18); }
+
+    fireT -= dt;
+    if ((autoFire || holdFire) && fireT <= 0) fire();
+
+    runT += dt;
+    if (level >= 8 && phase !== 'clear' && phase !== 'won') chargeDoux(dt / 4);   // from level 8 it refills by itself in about 24 seconds
+    comboT -= dt; if (comboT <= 0) combo = 0;
+    if (phase === 'wave' || phase === 'boss') {
+      coinT -= dt;
+      if (coinT <= 0) { floatCoins(); coinT = rand(2.2, 3.6) * (phase === 'boss' ? 1.8 : 1); }
+    }
+    if (phase === 'wave') {
+      levelT += dt;
+      while (opening.length && levelT >= opening[0][0]) opening.shift()[1]();
+      rockT -= dt; crateT -= dt; droneT -= dt; runnerT -= dt;
+      if (rockT <= 0) { spawnRock(); rockT = Math.max(0.3, 1.1 - 0.1 * (diff() - 1)) * rand(0.6, 1.3); }
+      if (droneT <= 0) {
+        spawnDrone(); if (level >= 3 && Math.random() < 0.4) spawnDrone();
+        if (level >= 2 && Math.random() < 0.24) spawnDrone(false, null, true);
+        if (level >= 2 && Math.random() < 0.22) { const at = { x: rand(-B.halfW * 0.6, B.halfW * 0.6), y: B.top }; for (let k = 0; k < 4; k++) spawnDrone(false, at); }
+        droneT = Math.max(1.8, 5 - 0.45 * (diff() - 1)) * rand(0.7, 1.2);
+      }
+      if (runnerT <= 0) { spawnDrone(true); runnerT = rand(16, 24); }
+      if (crateT <= 0) { spawnCrate(false); crateT = rand(11, 15); }
+      if (levelT >= LEVEL_LEN) {
+        phase = 'warn'; bossT = 2.8;
+        if (level >= LAST_LEVEL) { maxHp = 5; hp = Math.min(maxHp, hp + 2); toast('FINAL BOSS', '#ff7a4a', '2 EXTRA LIVES'); }
+        else toast('WARNING', '#ff7a4a', 'BOSS DRONE INCOMING');
+        [220, 220, 220].forEach((f, i) => tone(f, f * 0.5, 0.3, 'sawtooth', 0.06, i * 0.45));
+      }
+    } else if (phase === 'warn') {
+      bossT -= dt;
+      if (bossT <= 0) {
+        // the duel is 1v1: sweep away whatever is left of the wave
+        for (let i = rocks.length - 1; i >= 0; i--) { const r = rocks[i]; burst(r.x, r.y, '#c9b8a8', 14, 4, 0.5); scene.remove(r.g); }
+        crates.forEach(c => { burst(c.x, c.y, '#f3dc9a', 20, 5, 0.5); scene.remove(c.g); });
+        rocks = []; crates = [];
+        if (level >= LAST_LEVEL) { finalQueue = BOSSES.map((_, k) => k); spawnBoss(finalQueue.shift(), -1); spawnBoss(finalQueue.shift(), 1); }
+        else spawnBoss();
+        phase = 'boss';
+      }
+    } else if (phase === 'clear') {
+      bossT -= dt;
+      if (bossT <= 0) {
+        level++; levelT = 0; phase = 'wave'; rockT = 0.5; droneT = 1; crateT = 6;
+        toast('LEVEL ' + level, '#F8F3E9', level >= LAST_LEVEL ? 'THE LAST ONE' : 'FASTER · MORE DRONES');
+        [392, 523, 659, 784].forEach((f, i) => tone(f, f, 0.18, 'square', 0.03, i * 0.08));
+      }
+    } else if (phase === 'won') {
+      bossT -= dt; if (bossT <= 0) gameOver();
+    }
+  } else if (state === 'dying') {
+    deadT -= dt; if (deadT <= 0) gameOver();
+  }
+
+  if (playing || state === 'dying') {
+    const edt = dt * (fx.slow > 0 ? 0.4 : 1);   // Solana slows everything hostile, not you
+    DM.lit.emissiveIntensity = 1.4 + Math.sin(t * 5) * 0.6;
+    for (const b of [...bosses]) {
+      b.t += edt; b.hitT = Math.max(0, b.hitT - dt);
+      if (!b.arrived) {
+        b.y += (b.hy - b.y) * Math.min(1, edt * 1.5);
+        if (b.y < b.hy + 0.3) { b.arrived = true; pickBossTarget(b); }
+      } else {
+        const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy), near = d < 0.25;
+        if (near) { b.wait -= edt; if (b.wait <= 0) pickBossTarget(b); }
+        const sp = near ? 0 : b.spd * (b.rage ? 1.4 : 1) * (b.dash > 0 ? 4 : 1), ease = Math.min(1, edt * 4);
+        b.vx += (dx / (d || 1) * sp - b.vx) * ease; b.vy += (dy / (d || 1) * sp - b.vy) * ease;
+        b.x += b.vx * edt; b.y += b.vy * edt; b.dash = Math.max(0, b.dash - edt);
+      }
+      b.g.position.set(b.x + (b.hitT > 0 ? rand(-0.06, 0.06) : 0), b.y, 0);
+      b.g.userData.spin.forEach(s => { s.o.rotation[s.a] += dt * s.v; });
+      b.g.rotation.y = Math.sin(b.t * 1.2) * 0.25;
+      // kept low: a pale colour pushed bright just burns out to white
+      b.g.userData.lit.emissiveIntensity = b.hitT > 0 ? 2 : (b.rage ? 1.25 : 0.9) + Math.sin(t * (b.rage ? 12 : 5)) * 0.2;
+      if (playing && b.arrived) bossAttack(b, edt);
+      if (playing && Math.hypot(b.x - ship.x, b.y - ship.y) < b.r + 0.4 && fx.shield <= 0 && invuln <= 0) hurt();
+    }
+    // bullets
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.m.position.set(b.x, b.y, 0);
+      if (b.y > B.top + 3 || Math.abs(b.x) > B.halfW + 8) { scene.remove(b.m); bullets.splice(i, 1); continue; }
+      let hit = false;
+      for (let j = drones.length - 1; j >= 0 && !hit; j--) {
+        const d = drones[j];
+        if (Math.hypot(b.x - d.x, b.y - d.y) < d.r) {
+          hit = true; d.hp--; burst(b.x, b.y, '#ff8a9a', 5, 3, 0.25);
+          if (d.hp <= 0) killDrone(j);
+        }
+      }
+      if (!hit) for (const bo of bosses) {
+        if (Math.hypot(b.x - bo.x, b.y - bo.y) < bo.r) {
+          // the glowing eye at the centre is the weak point: shots that land in line with it count double
+          const core = Math.abs(b.x - bo.x) < bo.r * 0.28;
+          hit = true; burst(b.x, b.y, core ? '#fff2a8' : '#ffb48a', core ? 9 : 5, core ? 5 : 3, 0.25);
+          if (core && Math.random() < 0.25) popup('CORE', b.x, bo.y - bo.r, '#fff2a8');
+          damageBoss(core ? 2 : 1, bo); break;
+        }
+      }
+      for (let j = rocks.length - 1; j >= 0 && !hit; j--) {
+        const r = rocks[j];
+        if (Math.hypot(b.x - r.x, b.y - r.y) < r.r * 0.9 + 0.12) {
+          hit = true; r.hp--; burst(b.x, b.y + 0.2, '#ffe2b0', 5, 3, 0.25);
+          if (r.hp <= 0) { addScore(Math.round(4 + r.r * 6), r.x, r.y, '#c9b8a8'); killRock(j); }
+        }
+      }
+      for (let j = crates.length - 1; j >= 0 && !hit; j--) {
+        const c = crates[j], h = 0.9 * c.size;
+        if (Math.abs(b.x - c.x) < h + 0.1 && Math.abs(b.y - c.y) < h + 0.1) {
+          hit = true; c.hp--; c.hitT = 0.08; burst(b.x, b.y, '#f3dc9a', 4, 4, 0.25);
+          if (Math.random() < 0.3) tone(180, 120, 0.04, 'square', 0.02);
+          if (c.hp <= 0) breakCrate(j);
+        }
+      }
+      if (hit) { scene.remove(b.m); bullets.splice(i, 1); }
+    }
+    // drones
+    for (let i = drones.length - 1; i >= 0; i--) {
+      const d = drones[i]; d.t += edt;
+      if (d.runner) {
+        d.x += d.dir * (7 + level * 0.4) * edt; d.y += Math.sin(d.t * 5) * 1.5 * edt;
+        if (Math.abs(d.x) > B.halfW + 3) { scene.remove(d.g); drones.splice(i, 1); continue; }
+      } else if (d.t < d.life) {
+        d.y += (d.hy - d.y) * Math.min(1, edt * 2);
+        d.vx *= Math.pow(0.1, edt);
+        d.x = clamp(d.x + (Math.cos(d.t * 1.3 + d.ph) * 2.4 + d.vx) * edt, -B.halfW, B.halfW);
+        d.shotT -= edt;
+        if (playing && d.shotT <= 0) {
+          d.shotT = Math.max(0.9, 2.3 - 0.15 * diff()) * rand(0.8, 1.2) * (d.heavy ? 1.5 : 1);
+          const aim = Math.atan2(ship.y - d.y, ship.x - d.x);
+          (d.heavy ? [-0.25, 0, 0.25] : [0]).forEach(o => enemyShot(d.x, d.y - 0.5, aim + o, 6.5 + diff() * 0.5));
+          tone(520, 180, 0.08, 'square', 0.02);
+        }
+      } else {
+        // out of patience: dive at the ship's lane
+        d.y -= (8 + diff()) * edt; d.x += clamp(ship.x - d.x, -1, 1) * 2.5 * edt;
+        if (d.y < B.bottom) { scene.remove(d.g); drones.splice(i, 1); continue; }
+      }
+      d.g.position.set(d.x, d.y, 0);
+      if (d.runner) { d.g.rotation.z = (d.dir < 0 ? Math.PI : 0) + Math.sin(d.t * 5) * 0.12; d.g.userData.coin.rotation.y += dt * 3; }
+      else { d.g.userData.ring.rotation.z += dt * 2.2; d.g.rotation.y = Math.sin(d.t * 2 + d.ph) * 0.35; }
+      if (playing && Math.hypot(d.x - ship.x, d.y - ship.y) < d.r + 0.3) {
+        if (fx.shield > 0) killDrone(i);
+        else if (invuln <= 0) { burst(d.x, d.y, '#ff4a6a', 30, 7, 0.7); scene.remove(d.g); drones.splice(i, 1); hurt(); }
+      }
+    }
+    // enemy bullets
+    for (let i = ebullets.length - 1; i >= 0; i--) {
+      const b = ebullets[i]; b.x += b.vx * edt; b.y += b.vy * edt; b.m.position.set(b.x, b.y, 0);
+      const gone = b.y < B.bottom || b.y > B.top + 4 || Math.abs(b.x) > B.halfW + 6;
+      const hitShip = playing && Math.hypot(b.x - ship.x, b.y - ship.y) < 0.5;
+      // a shot that skims past without touching pays a little and feeds the combo, once per shot
+      if (playing && !b.grazed && !hitShip && fx.shield <= 0 && invuln <= 0 && Math.hypot(b.x - ship.x, b.y - ship.y) < 1.15) {
+        b.grazed = true; bump(); addScore(3, ship.x, ship.y + 1, '#F8F3E9', 'CLOSE'); tone(1500, 1900, 0.04, 'sine', 0.03);
+      }
+      if (hitShip && fx.shield <= 0 && invuln <= 0) hurt();
+      if (gone || hitShip) { scene.remove(b.m); ebullets.splice(i, 1); }
+    }
+    // rocks
+    for (let i = rocks.length - 1; i >= 0; i--) {
+      const r = rocks[i]; r.x += r.vx * edt; r.y += r.vy * edt;
+      r.g.position.set(r.x, r.y, 0); r.g.rotation.x += r.rs.x * dt; r.g.rotation.y += r.rs.y * dt; r.g.rotation.z += r.rs.z * dt;
+      if (r.y < B.bottom) { scene.remove(r.g); rocks.splice(i, 1); continue; }
+      if (playing && Math.hypot(r.x - ship.x, r.y - ship.y) < r.r * 0.82 + 0.5) {
+        if (fx.shield > 0) { addScore(5, r.x, r.y, CUR.eur.col); killRock(i, false); shake = 0.25; tone(600, 200, 0.12, 'sine', 0.05); }
+        else if (invuln <= 0) { killRock(i, false); hurt(); }
+      }
+    }
+    // crates
+    for (let i = crates.length - 1; i >= 0; i--) {
+      const c = crates[i]; c.y += c.vy * edt;
+      if (c.hp <= 0) { breakCrate(i); continue; }
+      if (c.vault && playing && c.y < B.top - 1) {
+        c.shotT -= edt;
+        if (c.shotT <= 0) {
+          c.shotT = 2.4; const n = 8 + diff(), o = rand(0, 6.28);
+          for (let k = 0; k < n; k++) enemyShot(c.x, c.y, o + k / n * 6.28, 4.5);
+          tone(300, 90, 0.2, 'sawtooth', 0.04);
+        }
+      }
+      c.g.position.set(c.x, c.y, 0);
+      c.box.rotation.x = Math.sin(t * 0.8 + i) * 0.3 + 0.25; c.box.rotation.y += dt * 0.6;
+      c.hitT = Math.max(0, c.hitT - dt);
+      c.box.scale.setScalar(c.size * 1.1 * (c.hitT > 0 ? 1.07 : 1));   // a quick swell on every hit
+      c.g.position.x = c.x + (c.hitT > 0 ? rand(-0.05, 0.05) : 0);
+      c.fg.scale.x = Math.max(0.001, c.hp / c.max) * c.size;
+      c.fg.position.x = -(1 - c.hp / c.max) * 0.9 * c.size;
+      if (c.y < B.bottom - 1) { scene.remove(c.g); crates.splice(i, 1); continue; }
+      if (playing && Math.abs(c.x - ship.x) < 0.9 * c.size + 0.45 && Math.abs(c.y - ship.y) < 0.9 * c.size + 0.45) {
+        if (fx.shield > 0) { c.hp -= 2; c.hitT = 0.1; }
+        else if (invuln <= 0) { c.hp -= 6; hurt(); }
+      }
+    }
+    // coins
+    const base = -4.2 * speedMul();
+    for (let i = coins.length - 1; i >= 0; i--) {
+      const c = coins[i];
+      if (c.free) { const d = Math.pow(0.08, dt); c.vx *= d; c.vy = base + (c.vy - base) * d; if (Math.abs(c.vx) < 0.05 && Math.abs(c.vy - base) < 0.1) c.free = false; }
+      if (fx.magnet > 0 && playing) {
+        const dx = ship.x - c.x, dy = ship.y - c.y, dist = Math.hypot(dx, dy);
+        if (dist < 8) { const pull = 22 / Math.max(dist, 0.6); c.x += dx / dist * pull * dt; c.y += dy / dist * pull * dt; }
+      }
+      c.x += c.vx * dt; c.y += c.vy * dt;
+      c.g.position.set(c.x, c.y + Math.sin(t * 3 + c.ph) * 0.06, 0);
+      c.g.userData.spin.rotation.y += c.spin * dt;
+      if (c.y < B.bottom) { scene.remove(c.g); coins.splice(i, 1); continue; }
+      if (playing && Math.hypot(c.x - ship.x, c.y - ship.y) < c.r + 0.6) collect(i);
+    }
+    // coins that land on top of each other ease apart, so each stays readable
+    for (let i = 0; i < coins.length; i++) {
+      for (let j = i + 1; j < coins.length; j++) {
+        const p = coins[i], q = coins[j], dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy), min = p.r + q.r;
+        if (d >= min) continue;
+        const ux = d > 0.001 ? dx / d : 1, uy = d > 0.001 ? dy / d : 0, push = (min - d) / 2 * Math.min(1, dt * 12);
+        p.x -= ux * push; p.y -= uy * push; q.x += ux * push; q.y += uy * push;
+      }
+    }
+  }
+  // rings
+  for (let i = rings.length - 1; i >= 0; i--) {
+    const r = rings[i]; r.t += dt; const k = r.t / r.life;
+    if (k >= 1) { scene.remove(r.m); r.m.geometry.dispose(); r.m.material.dispose(); rings.splice(i, 1); continue; }
+    const s = 0.5 + k * r.maxR; r.m.scale.set(s, s, 1); r.m.material.opacity = 1 - k;
+  }
+  updateParticles(dt);
+
+  shake = Math.max(0, shake - dt * 1.8);
+  const sx = shake > 0 ? rand(-1, 1) * shake * 0.35 : 0, sy = shake > 0 ? rand(-1, 1) * shake * 0.35 : 0;
+  placeCamera(ship.x * 0.12 + sx, sy);
+
+  hudT -= dt;
+  if (hudT <= 0 && (playing || state === 'dying')) { renderHUD(); hudT = 0.1; }
+}
+
+/* ---------- Loop ---------- */
+setOpt('sound', SET.sound);   // paint the saved settings onto the toggles
+menuStats(); loadBoard();
+let last = performance.now();
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (state !== 'pause') update(dt);
+  if (composer) composer.render(); else renderer.render(scene, camera);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
